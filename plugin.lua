@@ -4,6 +4,27 @@ makermod = {}
 makermod.objects = {}
 makermod.players = {}
 
+local function SetupEntity(ent, ply)
+	local temp = {}
+		temp['owner'] = ply
+		temp['touchfuncs'] = {}
+		temp['usefuncs'] = {}
+		
+	local touchfunc = function(ent, from, trace)
+						for _, r in pairs(temp['touchfuncs']) do
+							pcall(r, ent, from, trace)
+						end
+	                  end
+					  
+	local usefunc = function(ent, from, activator)
+						for _, r in pairs(temp['usefuncs']) do
+							pcall(r, ent, from, activator)
+						end
+	                  end
+		
+	makermod.objects[ent] = temp
+end
+
 local function OnUserSpawn(ply, firsttime)
  	if not firsttime then return end
 	makermod.players[ply.id] = {}
@@ -27,27 +48,10 @@ local function mSpawn(ply, args)
 	
 		vars['classname'] = 'misc_model'
 		vars['model'] = model
-	local ent = CreateEntity()
+	local ent = CreateEntity(vars)
 	ent.position = foo
 	
-	local temp = {}
-		temp['owner'] = ply
-		temp['touchfuncs'] = {}
-		temp['usefuncs'] = {}
-		
-	local touchfunc = function(ent, from, trace)
-						for _, r in pairs(temp['touchfuncs']) do
-							pcall(r, ent, from, trace)
-						end
-	                  end
-					  
-	local usefunc = function(ent, from, activator)
-						for _, r in pairs(temp['usefuncs']) do
-							pcall(r, ent, from, activator)
-						end
-	                  end
-		
-	makermod.objects[ent] = temp
+	SetupEntity(ent, ply)
 	makermod.players[ply.id]['selected'] = ent
 end
 
@@ -75,19 +79,19 @@ local function mConnectTo(ply, args)
 end
 
 local function mTouchable(ply, args)
- if not makermod.users[ply.id]['selected'] then return end
- 		makermod.users[ply.id]['selected'].touchable = true
+ if not makermod.players[ply.id]['selected'] then return end
+ 		makermod.players[ply.id]['selected'].touchable = true
 end
 
 local function mUsable(ply, args)
 	if not makermod.players[ply.id]['selected'] then return end
-	makermod.users[ply.id]['selected'].usable = true
+	makermod.players[ply.id]['selected'].usable = true
 end
 
 local function mPrint(ply, args)
 	if not makermod.players[ply.id]['selected'] then return end
 	local text = args[1]
-	local ent = makermod.users[ply.id]['selected']
+	local ent = makermod.players[ply.id]['selected']
 	if ent.touchable or ent.usable then
 		local printfunc = function(a,b,c)
 							if b != nil and b.player != nil then
@@ -100,15 +104,36 @@ local function mPrint(ply, args)
 		if ent.usable then
 			makermod.objects[ent]['usefuncs'][#makermod.objects[ent]['usefuncs'] + 1] = printfunc
 		end
-			
-		
 	end
 	if 
 end
 
 local function mSelect(ply, args)
-	if not makermod.players[ply.id]['selected'] then return end
-	
+	local pos = ply.position
+	pos.z = pos.z + 36.0
+	local angles = JPMath.AnglesVectors(ply.angles,true, false, false)
+	local endPos = pos:MA(16384, angles)
+	local trace = RayTrace(pos, 0, endPos, ply.id,Contents.CONTENTS_OPAQUE)
+	if trace.entityNum >= 0 then
+		local ent = GetEntity(trace.entityNum)
+		if !ent return end
+		if !makermod.objects[ent] then
+			SetupEntity(ent, 'map_object')
+			SendReliableCommand(ply.id, string.format('print "You cannot select map object!"'))
+			return
+		else
+			local data = makermod.objects[ent]
+			if data['owner'] != ply then
+				SendReliableCommand(ply.id, string.format('print "You are not owner of this entity!"'))
+				return
+			end
+			if data['owner'] == 'map_object' then
+				SendReliableCommand(ply.id, string.format('print "You cannot select map object!"'))
+				return
+			end
+			makermod.players[ply.id]['selected'] = ent
+		end
+	end
 end
 
 
