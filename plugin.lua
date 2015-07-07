@@ -79,7 +79,7 @@ local function TraceEntity(ply, dist)
 	if not dist then local dist = 16384 end
 	local pos = ply.position
 	pos.z = pos.z + 36.0
-	local angles = JPMath.AnglesVectors(ply.angles,true, false, false)
+	local angles = JPMath.AngleVectors(ply.angles,true, false, false)
 	local endPos = pos:MA(dist, angles)
 	local trace = RayTrace(pos, 0, endPos, ply.id,Contents.CONTENTS_OPAQUE)
 	return trace
@@ -259,7 +259,7 @@ end
 
 local function mArm(ply, args)
 	local arm = args[1]
-	makermod.players[ply.id]['arm'] = arm
+	makermod.players[ply.id]['arm'] = tonumber(arm)
 end
 
 local function mGrabbing(ply, args)
