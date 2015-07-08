@@ -9,8 +9,8 @@ local function BlankFunc() end -----fucking lua without 'continue' statement
 local function MainLoop()
 	for id,data in pairs(makermod.players) do
 		local ply = GetPlayer(id)
-		if not makermod.players[ply.id]['selected'] then return end
-		local ent = makermod.players[ply.id]['selected']
+		if not makermod.players[ply.id]['grabbed'] then return end
+		local ent = makermod.players[ply.id]['grabbed']
 		local temp = JPMath.AngleVectors(ply.angles, true, false, false)
 		temp = ply.position:MA(makermod.players[ply.id]['arm'], temp)
 		ent.position = temp
@@ -108,6 +108,7 @@ local function OnUserSpawn(ply, firsttime)
  	if not firsttime then return end
 	makermod.players[ply.id] = {}
 	makermod.players[ply.id]['selected'] = nil
+	makermod.players[ply.id]['grabbed'] = nil
 	makermod.players[ply.id]['arm'] = 200
 	makermod.players[ply.id]['autograbbing'] = true
 	makermod.players[ply.id]['objects'] = {}
@@ -142,8 +143,9 @@ local function mSpawn(ply, args)
 	
 	SetupEntity(ent, ply)
 	makermod.players[ply.id]['objects'][#makermod.players[ply.id]['objects']+1] = ent
+	makermod.players[ply.id]['selected'] = ent
 	if makermod.players[ply.id]['autograbbing'] then
-		makermod.players[ply.id]['selected'] = ent
+		makermod.players[ply.id]['grabbed'] = ent
 	end
 end
 
@@ -165,8 +167,9 @@ local function mSpawnFX(ply, args)
 	
 	SetupEntity(ent, ply)
 	makermod.players[ply.id]['objects'][#makermod.players[ply.id]['objects']+1] = ent
+	makermod.players[ply.id]['selected'] = ent
 	if makermod.players[ply.id]['autograbbing'] then
-		makermod.players[ply.id]['selected'] = ent
+		makermod.players[ply.id]['grabbed'] = ent
 	end
 end
 
@@ -192,19 +195,19 @@ local function mKill(ply, args)
 		for _, ent in pairs(makermod.players[ply.id]['objects']) do
 			ent:Free()
 		end
-		makermod.players[ply.id]['selected'] = nil
+		makermod.players[ply.id]['grabbed'] = nil
 	end
 end
 
 local function mMove(ply, args)
 	if not makermod.players[ply.id]['selected'] then return end
-	local vec = Vector3(args[1],args[2], args[3])
+	local vec = Vector3(args[1], args[2], args[3])
 	makermod.players[ply.id]['selected'].position = vec
 end
 
 local function mRotate(ply, args)
 	if not makermod.players[ply.id]['selected'] then return end
-	local vec = Vector3(args[1],args[2], args[3])
+	local vec = Vector3(args[1], args[2], args[3])
 	makermod.players[ply.id]['selected'].angles = vec
 end
 
@@ -316,8 +319,13 @@ local function mSelect(ply, args)
 end
 
 local function mDrop(ply, args)
+	if not makermod.players[ply.id]['grabbed'] then return end
+	makermod.players[ply.id]['grabbed'] = nil
+end
+
+local function mGrab(ply, args)
 	if not makermod.players[ply.id]['selected'] then return end
-	makermod.players[ply.id]['selected'] = nil
+	makermod.players[ply.id]['grabbed'] = makermod.players[ply.id]['selected']
 end
 
 local function mSetPassword(ply, args)
@@ -342,7 +350,7 @@ end
 
 local function mPassword(ply, args)
 	if #args < 1 then return end
-	makermod.players[ply.id]['selected'] = args[1]
+	makermod.players[ply.id]['password'] = args[1]
 end
 
 local function mDoor(ply, args)
@@ -353,6 +361,11 @@ local function mName(ply, args)
 	if not makermod.players[ply.id]['selected'] then return end
     if #args < 1 then return end
     makermod.objects[makermod.players[ply.id]['selected']]['name'] = args[1]
+end
+
+local function mAnim(ply, args)
+	if #args < 1 then return end
+	ply:SetAnim(args[1], 1, 1)
 end
 
 AddClientCommand('mplace', mSpawn)
@@ -369,7 +382,9 @@ AddClientCommand('marm', mArm)
 AddClientCommand('mgrabbing', mGrabbing)
 AddClientCommand('mselect', mSelect)
 AddClientCommand('mdrop', mDrop)
+AddClientCommand('mgrab', mGrab)
 AddClientCommand('msetpassword', mSetPassword)
 AddClientCommand('mpassword', mPassword)
 AddClientCommand('mname', mName)
 
+AddClientCommand('manim', mAnim)
