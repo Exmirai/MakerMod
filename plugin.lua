@@ -125,18 +125,43 @@ end
 AddListener('JPLUA_EVENT_CLIENTDISCONNECT',onUserDisconnect)
 
 local function mSpawn(ply, args)
+    if #args < 1 then return end
+
 	local model = args[1]
 	local vars = {}
 	local plypos = ply.position
 	local plyang = ply.angles
 	
-	local foo = JPMath.AngleVectors(plyang, true,false,false)
-	foo = plypos:MA(makermod.players[ply.id]['arm'], foo)
+	local entpos = JPMath.AngleVectors(plyang, true,false,false)
+	entpos = plypos:MA(makermod.players[ply.id]['arm'], entpos)
 	
 		vars['classname'] = 'misc_model'
 		vars['model'] = model
 	local ent = CreateEntity(vars)
-	ent.position = foo
+	ent.position = entpos
+	
+	SetupEntity(ent, ply)
+	makermod.players[ply.id]['objects'][#makermod.players[ply.id]['objects']+1] = ent
+	if makermod.players[ply.id]['autograbbing'] then
+		makermod.players[ply.id]['selected'] = ent
+	end
+end
+
+local function mSpawnFX(ply, args)
+	if #args < 1 then return end
+
+	local fx = args[1]
+	local vars = {}
+	local plypos = ply.position
+	local plyang = ply.angles
+
+	local entpos = JPMath.AngleVectors(plyang, true, false, false)
+	entpos = plypos:MA(makermod.players[ply.id]['arm'], entpos)
+	
+		vars['classname'] = 'fx_runner'
+		vars['fxFile'] = fx
+	local ent = CreateEntity(vars)
+	ent.position = entpos
 	
 	SetupEntity(ent, ply)
 	makermod.players[ply.id]['objects'][#makermod.players[ply.id]['objects']+1] = ent
@@ -258,6 +283,10 @@ local function mDest(ply, args)
 end
 
 local function mArm(ply, args)
+	if #args < 1 then
+		SendReliableCommand(ply.id, string.format('print "Marm: "' .. makermod.players[ply.id]['arm']))
+		return
+	end
 	local arm = args[1]
 	makermod.players[ply.id]['arm'] = tonumber(arm)
 end
@@ -327,6 +356,7 @@ local function mName(ply, args)
 end
 
 AddClientCommand('mplace', mSpawn)
+AddClientCommand('mplacefx', mSpawnFX)
 AddClientCommand('mkill', mKill)
 AddClientCommand('mmove', mMove)
 AddClientCommand('mrotate', mRotate)
