@@ -127,7 +127,10 @@ end
 AddListener('JPLUA_EVENT_CLIENTDISCONNECT',onUserDisconnect)
 
 local function mSpawn(ply, args)
-    if #args < 1 then return end
+	if #args < 1 then
+		SendReliableCommand(ply.id, string.format('print "Command usage:   ^5/mplace <foldername/modelname>\n^7Command usage:   ^5/mplace <special-ob-name> <optional-special-ob-parameters>"'))
+		return
+	end
 
 	local model = args[1]
 	local vars = {}
@@ -138,7 +141,7 @@ local function mSpawn(ply, args)
 	entpos = plypos:MA(makermod.players[ply.id]['arm'], entpos)
 	
 		vars['classname'] = 'misc_model'
-		vars['model'] = model
+		vars['model'] = 'models/map_objects/' .. model .. '.md3'
 	local ent = CreateEntity(vars)
 	ent.position = entpos
 	
@@ -147,11 +150,18 @@ local function mSpawn(ply, args)
 	makermod.players[ply.id]['selected'] = ent
 	if makermod.players[ply.id]['autograbbing'] then
 		makermod.players[ply.id]['grabbed'] = ent
+	else
+		-- todo: cloning
+		-- because the position - the link to the object
+		ent.position = makermod.players[ply.id]['mark_position'];
 	end
 end
 
 local function mSpawnFX(ply, args)
-	if #args < 1 then return end
+	if #args < 1 then
+		SendReliableCommand(ply.id, string.format('print "Command usage:   ^5/mplacefx <effectname> <delay-between-firings-in-milliseconds> <optional-random-delay-component-in-ms>\n^71 second is 1000 milliseconds"'))
+		return
+	end
 
 	local fx = args[1]
 	local vars = {}
@@ -163,6 +173,14 @@ local function mSpawnFX(ply, args)
 	
 		vars['classname'] = 'fx_runner'
 		vars['fxFile'] = fx
+
+		if args[2] then
+			vars['delay'] = tonumber(args[2])
+			if args[3] then
+				vars['random'] = tonumber(args[3])
+			end
+		end
+
 	local ent = CreateEntity(vars)
 	ent.position = entpos
 	
@@ -171,15 +189,21 @@ local function mSpawnFX(ply, args)
 	makermod.players[ply.id]['selected'] = ent
 	if makermod.players[ply.id]['autograbbing'] then
 		makermod.players[ply.id]['grabbed'] = ent
+	else
+		ent.position = makermod.players[ply.id]['mark_position'];
 	end
 end
 
 local function mKill(ply, args)
 	local mode = args[1]
 	if not mode then
-		if not makermod.players[ply.id]['selected'] then return end
- 		makermod.objects[makermod.players[ply.id]['selected']] = nil
-		makermod.players[ply.id]['selected']:Free()
+		local ent = makermod.players[ply.id]['selected']
+		if not ent then return end
+		if makermod.players[ply.id]['grabbed'] == ent then
+			makermod.players[ply.id]['grabbed'] = nil
+		end
+ 		makermod.objects[ent] = nil
+		ent:Free()
 		makermod.players[ply.id]['selected'] = nil
 	elseif mode == 'trace' then
 		local trace = TraceEntity(ply, nil)
@@ -193,10 +217,13 @@ local function mKill(ply, args)
 			end
 		end
 	elseif mode == 'all' then
+		makermod.players[ply.id]['selected'] = nil
+		makermod.players[ply.id]['grabbed'] = nil
 		for _, ent in pairs(makermod.players[ply.id]['objects']) do
+			makermod.objects[ent] = nil
 			ent:Free()
 		end
-		makermod.players[ply.id]['grabbed'] = nil
+		makermod.players[ply.id]['objects'] = {}
 	end
 end
 
@@ -394,6 +421,7 @@ local function mMark(ply, args)
 	SendReliableCommand(ply.id, string.format('print "Mark set to %s"', tostring(vec)))
 end
 
+
 AddClientCommand('mplace', mSpawn)
 AddClientCommand('mplacefx', mSpawnFX)
 AddClientCommand('mkill', mKill)
@@ -414,3 +442,63 @@ AddClientCommand('mpassword', mPassword)
 AddClientCommand('mname', mName)
 AddClientCommand('mmark', mMark)
 AddClientCommand('manim', mAnim)
+
+--[[
+
+mlistso
+mlistso weapons
+mlistso items
+mlistso machines
+
+stunbaton
+melee
+saber
+blasterpistol
+concussionrifle
+bryarpistol
+blaster
+disruptor
+bowcaster
+repeater
+demp2
+flechette
+rocket
+
+smallarmor
+armor
+medpak
+seeker
+shield
+bacta
+bigbacta
+binoculars
+sentry
+jetpack
+healthdisp
+ammodisp
+eweb
+cloak
+enlightenlight
+enlightendark
+boon
+ysalimari
+thermal
+tripmine
+detpack
+force
+blasterammo
+powercell
+bolts
+rockets
+allammo
+redcube
+bluecube
+
+gun
+ammounit
+shieldunit
+turret
+miniturret
+deathturret
+
+]]--
