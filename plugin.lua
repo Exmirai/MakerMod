@@ -113,6 +113,7 @@ local function OnUserSpawn(ply, firsttime)
 	makermod.players[ply.id]['autograbbing'] = true
 	makermod.players[ply.id]['objects'] = {}
 	makermod.players[ply.id]['password'] = ''
+	makermod.players[ply.id]['mark_position'] = nil
 end
 AddListener('JPLUA_EVENT_CLIENTSPAWN',OnUserSpawn)
 
@@ -368,6 +369,31 @@ local function mAnim(ply, args)
 	ply:SetAnim(args[1], 1, 1)
 end
 
+local function mMark(ply, args)
+	local vec = ply.position
+	local i, type, res
+	if #args > 1 then
+		for i=1, 3 do
+			if i==1 then type = 'x' elseif i==2 then type = 'y' elseif i==3 then type='z' end
+			if args[i] == nil then
+				return
+			else
+				res = string.match(args[i], "+(%d+)")
+				if res then
+					vec[type] = vec[type] + res
+				else
+					res = string.match(args[i], "-(%d+)")
+					if res then
+						vec[type] = vec[type] - res
+					end
+				end
+			end
+		end
+	end
+	makermod.players[ply.id]['mark_position'] = vec
+	SendReliableCommand(ply.id, string.format('print "Mark set to %s"', tostring(vec)))
+end
+
 AddClientCommand('mplace', mSpawn)
 AddClientCommand('mplacefx', mSpawnFX)
 AddClientCommand('mkill', mKill)
@@ -386,5 +412,5 @@ AddClientCommand('mgrab', mGrab)
 AddClientCommand('msetpassword', mSetPassword)
 AddClientCommand('mpassword', mPassword)
 AddClientCommand('mname', mName)
-
+AddClientCommand('mmark', mMark)
 AddClientCommand('manim', mAnim)
