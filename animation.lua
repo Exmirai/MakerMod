@@ -32,7 +32,10 @@ easing['bounce'] = function(x)
 	end
 	return value
 end
-easing['elastic'] = function Ease_elastic(x) x = x-1; return math.pow(2, 10 * x) * math.cos(20 * x * math.pi / 3) end
+easing['elastic'] = function(x)
+	x = x-1;
+	return math.pow(2, 10 * x) * math.cos(20 * x * math.pi / 3)
+end
 
 local function Animate(dur, ease, func)
 	local ef = easing[ease]

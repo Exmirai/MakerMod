@@ -175,6 +175,8 @@ local function mSpawnFX(ply, args)
 		vars['fxFile'] = fx
 
 		if args[2] then
+			-- default = 200
+			-- change to makermod-compatible
 			vars['delay'] = tonumber(args[2])
 			if args[3] then
 				vars['random'] = tonumber(args[3])
@@ -199,12 +201,13 @@ local function mKill(ply, args)
 	if not mode then
 		local ent = makermod.players[ply.id]['selected']
 		if not ent then return end
+
+		makermod.players[ply.id]['selected'] = nil
 		if makermod.players[ply.id]['grabbed'] == ent then
 			makermod.players[ply.id]['grabbed'] = nil
 		end
  		makermod.objects[ent] = nil
 		ent:Free()
-		makermod.players[ply.id]['selected'] = nil
 	elseif mode == 'trace' then
 		local trace = TraceEntity(ply, nil)
 		if trace.entityNum > 0 then
@@ -220,8 +223,10 @@ local function mKill(ply, args)
 		makermod.players[ply.id]['selected'] = nil
 		makermod.players[ply.id]['grabbed'] = nil
 		for _, ent in pairs(makermod.players[ply.id]['objects']) do
-			makermod.objects[ent] = nil
-			ent:Free()
+			if ent then
+				makermod.objects[ent] = nil
+				ent:Free()
+			end
 		end
 		makermod.players[ply.id]['objects'] = {}
 	end
@@ -315,7 +320,7 @@ end
 
 local function mArm(ply, args)
 	if #args < 1 then
-		SendReliableCommand(ply.id, string.format('print "Marm: "' .. makermod.players[ply.id]['arm']))
+		SendReliableCommand(ply.id, string.format('print "Marm: %d"', makermod.players[ply.id]['arm']))
 		return
 	end
 	local arm = args[1]
@@ -418,7 +423,12 @@ local function mMark(ply, args)
 		end
 	end
 	makermod.players[ply.id]['mark_position'] = vec
-	SendReliableCommand(ply.id, string.format('print "Mark set to %s"', tostring(vec)))
+	SendReliableCommand(ply.id, string.format('print "Mark set to (%d %d %d)"', vec.x, vec.y, vec.z))
+end
+
+local function mOrigin(ply)
+	local vec = ply.position
+	SendReliableCommand(ply.id, string.format('print "Origin: (%d %d %d)"', vec.x, vec.y, vec.z))
 end
 
 
@@ -441,6 +451,7 @@ AddClientCommand('msetpassword', mSetPassword)
 AddClientCommand('mpassword', mPassword)
 AddClientCommand('mname', mName)
 AddClientCommand('mmark', mMark)
+AddClientCommand('morigin', mOrigin)
 AddClientCommand('manim', mAnim)
 
 --[[
