@@ -87,12 +87,13 @@ end
 
 local function TraceEntity(ply, dist)
 	if not ply then return end
-	if not dist then local dist = 16384 end
+	if not dist then dist = 16384 end
 	local pos = ply.position
 	pos.z = pos.z + 36.0
 	local angles = JPMath.AngleVectors(ply.angles,true, false, false)
 	local endPos = pos:MA(dist, angles)
-	local trace = RayTrace(pos, 0, endPos, ply.id,Contents.CONTENTS_OPAQUE)
+	local mask = Contents.CONTENTS_SOLID | Contents.CONTENTS_SLIME | Contents.CONTENTS_LAVA | Contents.CONTENTS_TERRAIN | Contents.CONTENTS_BODY | Contents.CONTENTS_ITEM | Contents.CONTENTS_CORPSE
+	local trace = RayTrace(pos, 0, endPos, ply.id,mask)
 	return trace
 end
 
@@ -157,6 +158,7 @@ local function mSpawn(ply, args)
 	ent.position = entpos
 	
 	SetupEntity(ent, ply)
+	
 	makermod.players[ply.id]['objects'][#makermod.players[ply.id]['objects']+1] = ent
 	makermod.players[ply.id]['selected'] = ent
 	if makermod.players[ply.id]['autograbbing'] then
@@ -364,7 +366,6 @@ local function mSelect(ply, args)
 		local ent = GetEntity(trace.entityNum)
 		if not ent then return end
 		if not CheckEntity(ent, ply) then
-			SendReliableCommand(ply.id, string.format('print "You not own this entity!"'))
 		 	return
 		end
 			makermod.players[ply.id]['selected'] = ent
@@ -481,6 +482,7 @@ AddClientCommand('mname', mName)
 AddClientCommand('mmark', mMark)
 AddClientCommand('morigin', mOrigin)
 AddClientCommand('manim', mAnim)
+AddClientCommand('mattachfx', mAttachFx)
 
 --[[
 
