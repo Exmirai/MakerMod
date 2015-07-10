@@ -9,14 +9,21 @@ local function BlankFunc() end -----fucking lua without 'continue' statement
 local function MainLoop()
 	for id,data in pairs(makermod.players) do
 		local ply = GetPlayer(id)
-		if not makermod.players[ply.id]['grabbed'] then return end
-		local ent = makermod.players[ply.id]['grabbed']
-		local temp = JPMath.AngleVectors(ply.angles, true, false, false)
-		temp = ply.position:MA(makermod.players[ply.id]['arm'], temp)
-		ent.position = temp
-		local ang = ply.angles
-		ang.x = ent.angles.x
-		ent.angles = ang
+		if makermod.players[ply.id]['grabbed'] then 
+			local ent = makermod.players[ply.id]['grabbed']
+			local temp = JPMath.AngleVectors(ply.angles, true, false, false)
+			temp = ply.position:MA(makermod.players[ply.id]['arm'], temp)
+			ent.position = temp
+			local ang = ply.angles
+			ang.x = ent.angles.x
+			ent.angles = ang
+		end
+	end
+	for ent, data in pairs(makermod.objects) do
+		if data['isfx'] and data['attachedto'] and data['bonename'] then
+			local vec = data['attachedto']:GetBoneVector(data['bonename'])
+			ent.position = vec
+		end
 	end
 end
 
@@ -33,6 +40,10 @@ local function SetupEntity(ent, ply)
 		temp['password'] = ''
 		temp['name'] = ''
 		temp['tele_destination'] = nil
+		----fx data
+		temp['isfx'] = false
+		temp['attachedto'] = nil
+		temp['bonename'] = nil
 		
 		
 	local touchfunc = function(ent, from, trace)
@@ -185,8 +196,9 @@ local function mSpawnFX(ply, args)
 
 	local ent = CreateEntity(vars)
 	ent.position = entpos
-	
 	SetupEntity(ent, ply)
+	makermod.objects[ent]['isfx'] = true
+	
 	makermod.players[ply.id]['objects'][#makermod.players[ply.id]['objects']+1] = ent
 	makermod.players[ply.id]['selected'] = ent
 	if makermod.players[ply.id]['autograbbing'] then
@@ -214,8 +226,16 @@ local function mKill(ply, args)
 			local ent = GetEntity(trace.entityNum)
 			if not ent then return end
 			if CheckEntity(ent, ply) then
-				ent:Free()
+				for i=0, #GetPlayers() do
+						if makermod.players[ply.id]['selected'] == ent then
+							makermod.players[ply.id]['selected'] = nil
+						end
+						if makermod.players[ply.id]['grabbed'] == ent then
+							makermod.players[ply.id]['grabbed'] = nil
+						end
+					end
 				makermod.objects[ent] = nil
+				ent:Free()
 				return
 			end
 		end
@@ -431,6 +451,14 @@ local function mOrigin(ply)
 	SendReliableCommand(ply.id, string.format('print "Origin: (%d %d %d)"', vec.x, vec.y, vec.z))
 end
 
+local function mAttachFx(ply, args)
+	if not makermod.players[ply.id]['selected'] then return end
+	if #args < 1 then return end
+	local data = makermod.objects[makermod.players[ply.id]['selected']]
+	local bone = args[1]
+	data['attachedto'] = ply.entity
+	data['bone'] = bone
+end
 
 AddClientCommand('mplace', mSpawn)
 AddClientCommand('mplacefx', mSpawnFX)
