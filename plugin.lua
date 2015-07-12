@@ -19,7 +19,8 @@ local function MainLoop()
 			ent.angles = ang
 		end
 	end
-	for ent, data in pairs(makermod.objects) do
+	for id, data in pairs(makermod.objects) do
+		local ent = GetEntity(id)
 		if data['isfx'] and data['attachedto'] and data['bonename'] then
 			local vec = data['attachedto']:GetBoneVector(data['bonename'])
 			ent.position = vec
@@ -81,7 +82,7 @@ local function SetupEntity(ent, ply)
 		ent:SetTouchFunction(touchfunc)
 		ent:SetUseFunction(usefunc)
 		
-	makermod.objects[ent] = temp
+	makermod.objects[ent.id] = temp
 end
 
 
@@ -98,12 +99,12 @@ local function TraceEntity(ply, dist)
 end
 
 local function CheckEntity(ent, ply)
-		if not makermod.objects[ent] then
+		if not makermod.objects[ent.id] then
 			SetupEntity(ent, 'map_object')
 			SendReliableCommand(ply.id, string.format('print "You cannot select map object!"'))
 			return false
 		else
-			local data = makermod.objects[ent]
+			local data = makermod.objects[ent.id]
 			if data['owner'] ~= ply then
 				SendReliableCommand(ply.id, string.format('print "You are not owner of this entity!"'))
 				return false
@@ -131,7 +132,7 @@ AddListener('JPLUA_EVENT_CLIENTSPAWN',OnUserSpawn)
 
 local function onUserDisconnect(ply)
 	for _, ent in pairs(makermod.players[ply.id]['objects']) do
-		makermod.objects[ent] = nil
+		makermod.objects[ent.id] = nil
 		ent:Free()
 	end
 	makermod.players[ply.id] = nil
@@ -199,7 +200,7 @@ local function mSpawnFX(ply, args)
 	local ent = CreateEntity(vars)
 	ent.position = entpos
 	SetupEntity(ent, ply)
-	makermod.objects[ent]['isfx'] = true
+	makermod.objects[ent.id]['isfx'] = true
 	
 	makermod.players[ply.id]['objects'][#makermod.players[ply.id]['objects']+1] = ent
 	makermod.players[ply.id]['selected'] = ent
@@ -220,7 +221,7 @@ local function mKill(ply, args)
 		if makermod.players[ply.id]['grabbed'] == ent then
 			makermod.players[ply.id]['grabbed'] = nil
 		end
- 		makermod.objects[ent] = nil
+ 		makermod.objects[ent.id] = nil
 		ent:Free()
 	elseif mode == 'trace' then
 		local trace = TraceEntity(ply, nil)
@@ -236,7 +237,7 @@ local function mKill(ply, args)
 							makermod.players[ply.id]['grabbed'] = nil
 						end
 					end
-				makermod.objects[ent] = nil
+				makermod.objects[ent.id] = nil
 				ent:Free()
 				return
 			end
@@ -246,7 +247,7 @@ local function mKill(ply, args)
 		makermod.players[ply.id]['grabbed'] = nil
 		for _, ent in pairs(makermod.players[ply.id]['objects']) do
 			if ent then
-				makermod.objects[ent] = nil
+				makermod.objects[ent.id] = nil
 				ent:Free()
 			end
 		end
@@ -273,8 +274,8 @@ local function mConnectTo(ply, args)
 	if trace.entityNum >= 0 then
 		local ent = GetEntity(trace.entityNum)
 		if not CheckEntity(ent, ply) then return end
-		local data1 = makermod.objects[makermod.players[ply.id]['selected']]
-		local data2 = makermod.objects[ent]
+		local data1 = makermod.objects[makermod.players[ply.id]['selected'].id]
+		local data2 = makermod.objects[ent.id]
 			data1['connectedTo'][#data1['connectedTo']+1] = ent
 			data2['connectedFrom'][#data2['connectedFrom']+1] = makermod.players[ply.id]['selected']
 	else
@@ -305,17 +306,17 @@ local function mPrintsw(ply, args)
 							end
 						  end
 		if ent.touchable then
-			makermod.objects[ent]['touchfuncs'][#makermod.objects[ent]['touchfuncs'] + 1] = printfunc
+			makermod.objects[ent.id]['touchfuncs'][#makermod.objects[ent.id]['touchfuncs'] + 1] = printfunc
 		end
 		if ent.usable then
-			makermod.objects[ent]['usefuncs'][#makermod.objects[ent]['usefuncs'] + 1] = printfunc
+			makermod.objects[ent.id]['usefuncs'][#makermod.objects[ent.id]['usefuncs'] + 1] = printfunc
 		end
 	end
 end
 
 local function mTelesw(ply, args)
 	if not makermod.players[ply.id]['selected'] then return end
-	local data = makermod.objects[makermod.players[ply.id]['selected']]
+	local data = makermod.objects[makermod.players[ply.id]['selected'].id]
 	local func = function(a,b,c)
 					if not b then return end
 					if b.player then
@@ -331,12 +332,12 @@ local function mDest(ply, args)
 	 if #args >= 1 then
 		if args[1] == 'trace' then
 			local trace = TraceEntity(ply, nil)
-			makermod.objects[makermod.players[ply.id]['selected']]['tele_destination'] = Vector3(trace.endpos.x, trace.endpos.y, trace.endpos.z)
+			makermod.objects[makermod.players[ply.id]['selected'].id]['tele_destination'] = Vector3(trace.endpos.x, trace.endpos.y, trace.endpos.z)
 		elseif #args >= 3 then
-			makermod.objects[makermod.players[ply.id]['selected']]['tele_destination'] = Vector3(tonumber(args[1]), tonumber(args[2]) ,tonumber(args[3]))
+			makermod.objects[makermod.players[ply.id]['selected'].id]['tele_destination'] = Vector3(tonumber(args[1]), tonumber(args[2]) ,tonumber(args[3]))
 		end
 	 elseif #args == 0 then
-	 		makermod.objects[makermod.players[ply.id]['selected']]['tele_destination'] = Vector3(ply.position.x, ply.position.y, ply.position.z)
+	 		makermod.objects[makermod.players[ply.id]['selected'].id]['tele_destination'] = Vector3(ply.position.x, ply.position.y, ply.position.z)
 	 end
 end
 
@@ -393,12 +394,12 @@ local function mSetPassword(ply, args)
 			local ent = GetEntity(trace.entityNum)
 			if not ent then return end
 			if not CheckEntity(ent, ply) then return end
-			makermod.objects[ent]['password'] = pass
+			makermod.objects[ent.id]['password'] = pass
 		end
 	else
 		if not makermod.players[ply.id]['selected'] then return end
 		local ent = makermod.players[ply.id]['selected']
-		makermod.objects[ent]['password'] = value
+		makermod.objects[ent.id]['password'] = value
 	end
 end
 
@@ -414,7 +415,7 @@ end
 local function mName(ply, args)
 	if not makermod.players[ply.id]['selected'] then return end
     if #args < 1 then return end
-    makermod.objects[makermod.players[ply.id]['selected']]['name'] = args[1]
+    makermod.objects[makermod.players[ply.id]['selected'].id]['name'] = args[1]
 end
 
 local function mAnim(ply, args)
@@ -455,11 +456,12 @@ end
 local function mAttachFx(ply, args)
 	if not makermod.players[ply.id]['selected'] then return end
 	if #args < 1 then return end
-	local data = makermod.objects[makermod.players[ply.id]['selected']]
+	local data = makermod.objects[makermod.players[ply.id]['selected'].id]
 	local bone = args[1]
 	data['attachedto'] = ply.entity
 	data['bone'] = bone
 end
+
 
 AddClientCommand('mplace', mSpawn)
 AddClientCommand('mplacefx', mSpawnFX)
