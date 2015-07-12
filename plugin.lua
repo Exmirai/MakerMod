@@ -31,6 +31,25 @@ end
 AddListener('JPLUA_EVENT_RUNFRAME', MainLoop)
 
 
+local function ParseVector(vec, args)
+		for i=1, 3 do
+			if i==1 then type = 'x' elseif i==2 then type = 'y' elseif i==3 then type='z' end
+			if args[i] == nil then
+				return
+			else
+				res = string.match(args[i], "+(%d+)")
+				if res then
+					vec[type] = vec[type] + res
+				else
+					res = string.match(args[i], "-(%d+)")
+					if res then
+						vec[type] = vec[type] - res
+					end
+				end
+			end
+		end
+end
+
 local function SetupEntity(ent, ply)
 	local temp = {}
 		temp['owner'] = ply
@@ -427,22 +446,7 @@ local function mMark(ply, args)
 	local vec = ply.position
 	local i, type, res
 	if #args > 1 then
-		for i=1, 3 do
-			if i==1 then type = 'x' elseif i==2 then type = 'y' elseif i==3 then type='z' end
-			if args[i] == nil then
-				return
-			else
-				res = string.match(args[i], "+(%d+)")
-				if res then
-					vec[type] = vec[type] + res
-				else
-					res = string.match(args[i], "-(%d+)")
-					if res then
-						vec[type] = vec[type] - res
-					end
-				end
-			end
-		end
+		vec = ParseVector(vec, args)
 	end
 	makermod.players[ply.id]['mark_position'] = vec
 	SendReliableCommand(ply.id, string.format('print "Mark set to (%d %d %d)"', vec.x, vec.y, vec.z))
@@ -462,6 +466,31 @@ local function mAttachFx(ply, args)
 	data['bone'] = bone
 end
 
+local function mScale(ply, args)
+	if #args < 1 then return end
+	local vec = Vector3(0,0,0)
+	if args[1] == 'trace' then
+		local trace = TraceEntity(ply, nil)
+		if trace.entityNum >= 0 then
+			local ent = GetEntity(trace.entityNum)
+			if not ent then return end
+			if not CheckEntity(ent, ply) then return end
+			vec = ParseVector(vec, args)
+			ent:Scale(vec)
+		end
+	else
+		if not makermod.players[ply.id]['selected'] then return end
+		vec = ParseVector(vec, args)
+		makermod.players[ply.id]['selected']:Scale(vec)
+	end
+end
+
+local function mScaleMe(ply, args)
+	if #args < 1 then return end
+	local ent = ply.entity
+	local vec = ParseVector(Vector3(0,0,0), args)
+	ent:Scale(vec)
+end
 
 AddClientCommand('mplace', mSpawn)
 AddClientCommand('mplacefx', mSpawnFX)
@@ -485,6 +514,8 @@ AddClientCommand('mmark', mMark)
 AddClientCommand('morigin', mOrigin)
 AddClientCommand('manim', mAnim)
 AddClientCommand('mattachfx', mAttachFx)
+AddClientCommand('mscale', mScale)
+AddClientCommand('mscaleme', mScaleMe)
 
 --[[
 
