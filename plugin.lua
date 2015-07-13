@@ -3,6 +3,10 @@ local plugin = RegisterPlugin("MakerMod", "2.0")
 makermod = {}
 makermod.objects = {}
 makermod.players = {}
+makermod.cvars = {}
+
+makermod.cvars['pain_maxdist'] = CreateCvar('makermod_pain_maxdistance', '200', CvarFlags.ARCHIVE)
+makermod.cvars['pain_maxdmg'] = CreateCvar('makermod_pain_maxdamage', '100000000', CvarFlags.ARCHIVE)
 
 local function BlankFunc() end -----fucking lua without 'continue' statement
 
@@ -21,9 +25,14 @@ local function MainLoop()
 	end
 	for id, data in pairs(makermod.objects) do
 		local ent = GetEntity(id)
-		if data['isfx'] and data['attachedto'] and data['bonename'] then
+		if (data['isfx'] ~= false) and (data['attachedto'] ~= 0) and (data['bonename'] ~= '') then
 			local vec = data['attachedto']:GetBoneVector(data['bonename'])
 			ent.position = vec
+		elseif (data['isfx'] ~= false) and (data['pain_damage'] ~= 0) and (data['pain_distance'] ~= 0) then
+			local ents = EntitiesInRadius(ent.position, data['pain_distance'])
+			for _,e in pairs(ents) do
+				e.health = e.health - data['pain_damage']
+			end
 		end
 	end
 end
@@ -35,7 +44,7 @@ local function ParseVector(vec, args)
 		for i=1, 3 do
 			if i==1 then type = 'x' elseif i==2 then type = 'y' elseif i==3 then type='z' end
 			if args[i] == nil then
-				return
+				return vec
 			else
 				res = string.match(args[i], "+(%d+)")
 				if res then
@@ -44,10 +53,16 @@ local function ParseVector(vec, args)
 					res = string.match(args[i], "-(%d+)")
 					if res then
 						vec[type] = vec[type] - res
+					else
+						res = string.match(args[i], "%d+")
+						if res then
+							vec[type] = res
+						end
 					end
 				end
 			end
 		end
+		return vec
 end
 
 local function SetupEntity(ent, ply)
@@ -62,8 +77,12 @@ local function SetupEntity(ent, ply)
 		temp['tele_destination'] = nil
 		----fx data
 		temp['isfx'] = false
-		temp['attachedto'] = nil
-		temp['bonename'] = nil
+		temp['attachedto'] = 0
+		temp['bonename'] = ''
+		temp['pain_distance'] = 0
+		temp['pain_damage'] = 0
+		----mPain
+		 
 		
 		
 	local touchfunc = function(ent, from, trace)
@@ -352,12 +371,10 @@ local function mDest(ply, args)
 		if args[1] == 'trace' then
 			local trace = TraceEntity(ply, nil)
 			makermod.objects[makermod.players[ply.id]['selected'].id]['tele_destination'] = Vector3(trace.endpos.x, trace.endpos.y, trace.endpos.z)
-		elseif #args >= 3 then
-			makermod.objects[makermod.players[ply.id]['selected'].id]['tele_destination'] = Vector3(tonumber(args[1]), tonumber(args[2]) ,tonumber(args[3]))
+		else
+		 	makermod.objects[makermod.players[ply.id]['selected'].id]['tele_destination'] = ParseVector(ply.position, args)
 		end
-	 elseif #args == 0 then
-	 		makermod.objects[makermod.players[ply.id]['selected'].id]['tele_destination'] = Vector3(ply.position.x, ply.position.y, ply.position.z)
-	 end
+	end
 end
 
 local function mArm(ply, args)
@@ -492,6 +509,26 @@ local function mScaleMe(ply, args)
 	ent:Scale(vec)
 end
 
+local function mBreakable(ply, args)
+	if not makermod.players[ply.id]['selected'] then return end
+	if #args < 1 then return end
+	makermod.players[ply.id]['selected'].breakable = true
+	makermod.players[ply.id]['selected'].health = tonumber(args[1])
+end
+
+local function mPain(ply, args)
+	if not makermod.players[ply.id]['selected'] then return end
+	if #args < 1 then return end
+	local data = makermod.objects[makermod.players[ply.id]['selected'].id]
+	if data['isfx'] == false then return end
+	local dist = args[1]
+	local dmg = args[2]
+	if dist > makermod.cvars['pain_maxdist'] then dist = makermod.cvars['pain_maxdist'] end
+	if dmg > makermod.cvars['pain_maxdmg'] then dmg = makermod.cvars['pain_maxdmg'] end
+	data['pain_distance'] = dist
+	data['pain_damage'] = dmg	
+end
+
 AddClientCommand('mplace', mSpawn)
 AddClientCommand('mplacefx', mSpawnFX)
 AddClientCommand('mkill', mKill)
@@ -516,6 +553,8 @@ AddClientCommand('manim', mAnim)
 AddClientCommand('mattachfx', mAttachFx)
 AddClientCommand('mscale', mScale)
 AddClientCommand('mscaleme', mScaleMe)
+AddClientCommand('mbreakable', mBreakable)
+AddClientCommand('mpain', mPain)
 
 --[[
 
