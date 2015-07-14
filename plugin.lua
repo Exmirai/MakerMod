@@ -28,11 +28,6 @@ local function MainLoop()
 		if (data['isfx'] ~= false) and (data['attachedto'] ~= 0) and (data['bonename'] ~= '') then
 			local vec = data['attachedto']:GetBoneVector(data['bonename'])
 			ent.position = vec
-		elseif (data['isfx'] ~= false) and (data['pain_damage'] ~= 0) and (data['pain_distance'] ~= 0) then
-			local ents = EntitiesInRadius(ent.position, data['pain_distance'])
-			for _,e in pairs(ents) do
-				e.health = e.health - data['pain_damage']
-			end
 		end
 	end
 end
@@ -79,8 +74,6 @@ local function SetupEntity(ent, ply)
 		temp['isfx'] = false
 		temp['attachedto'] = 0
 		temp['bonename'] = ''
-		temp['pain_distance'] = 0
-		temp['pain_damage'] = 0
 		----mPain
 		 
 		
@@ -521,12 +514,13 @@ local function mPain(ply, args)
 	if #args < 1 then return end
 	local data = makermod.objects[makermod.players[ply.id]['selected'].id]
 	if data['isfx'] == false then return end
-	local dist = args[1]
-	local dmg = args[2]
-	if dist > makermod.cvars['pain_maxdist'] then dist = makermod.cvars['pain_maxdist'] end
-	if dmg > makermod.cvars['pain_maxdmg'] then dmg = makermod.cvars['pain_maxdmg'] end
-	data['pain_distance'] = dist
-	data['pain_damage'] = dmg	
+	local dist = tonumber(args[1])
+	local dmg = tonumber(args[2])
+	if dist > makermod.cvars['pain_maxdist'] or dist < 0 then dist = makermod.cvars['pain_maxdist'] end
+	if dmg > makermod.cvars['pain_maxdmg'] or dmg < 0 then dmg = makermod.cvars['pain_maxdmg'] end
+	ent:SetVar('splashRadius', tostring(dist))
+	ent:SetVar('splashDamage', tostring(dmg))
+	ent.spawnflags = ent.spawnflags | 4
 end
 
 AddClientCommand('mplace', mSpawn)
