@@ -34,6 +34,10 @@ end
 
 AddListener('JPLUA_EVENT_RUNFRAME', MainLoop)
 
+local function RemoveEntity(ent)
+		makermod.objects[ent.id] = nil
+		ent:Free()
+end
 
 local function ParseVector(vec, args)
 		for i=1, 3 do
@@ -252,8 +256,7 @@ local function mKill(ply, args)
 		if makermod.players[ply.id]['grabbed'] == ent then
 			makermod.players[ply.id]['grabbed'] = nil
 		end
- 		makermod.objects[ent.id] = nil
-		ent:Free()
+ 		RemoveEntity(ent)
 	elseif mode == 'trace' then
 		local trace = TraceEntity(ply, nil)
 		if trace.entityNum > 0 then
@@ -268,8 +271,7 @@ local function mKill(ply, args)
 							makermod.players[ply.id]['grabbed'] = nil
 						end
 					end
-				makermod.objects[ent.id] = nil
-				ent:Free()
+				RemoveEntity(ent)
 				return
 			end
 		end
@@ -473,7 +475,7 @@ local function mAttachFx(ply, args)
 	local data = makermod.objects[makermod.players[ply.id]['selected'].id]
 	local bone = args[1]
 	data['attachedto'] = ply.entity
-	data['bone'] = bone
+	data['bonename'] = bone
 end
 
 local function mScale(ply, args)
@@ -495,7 +497,7 @@ local function mScale(ply, args)
 	end
 end
 
-local function mScaleMe(ply, args)
+function mScaleMe(ply, args)
 	if #args < 1 then return end
 	local ent = ply.entity
 	local vec = ParseVector(Vector3(0,0,0), args)
@@ -507,6 +509,9 @@ local function mBreakable(ply, args)
 	if #args < 1 then return end
 	makermod.players[ply.id]['selected'].breakable = true
 	makermod.players[ply.id]['selected'].health = tonumber(args[1])
+	makermod.players[ply.id]['selected']:SetDieFunction( function(a,b,c, d,e) 
+															RemoveEntity(a)
+															end )
 end
 
 local function mPain(ply, args)
@@ -516,11 +521,11 @@ local function mPain(ply, args)
 	if data['isfx'] == false then return end
 	local dist = tonumber(args[1])
 	local dmg = tonumber(args[2])
-	if dist > makermod.cvars['pain_maxdist'] or dist < 0 then dist = makermod.cvars['pain_maxdist'] end
-	if dmg > makermod.cvars['pain_maxdmg'] or dmg < 0 then dmg = makermod.cvars['pain_maxdmg'] end
-	ent:SetVar('splashRadius', tostring(dist))
-	ent:SetVar('splashDamage', tostring(dmg))
-	ent.spawnflags = ent.spawnflags | 4
+	if dist > makermod.cvars['pain_maxdist']:GetInteger()  or dist < 0 then dist = makermod.cvars['pain_maxdist']:GetInteger() end
+	if dmg > makermod.cvars['pain_maxdmg']:GetInteger() or dmg < 0 then dmg = makermod.cvars['pain_maxdmg']:GetInteger() end
+	makermod.players[ply.id]['selected']:SetVar('splashRadius', tostring(dist))
+	makermod.players[ply.id]['selected']:SetVar('splashDamage', tostring(dmg))
+	makermod.players[ply.id]['selected'].spawnflags = makermod.players[ply.id]['selected'].spawnflags | 4
 end
 
 AddClientCommand('mplace', mSpawn)
