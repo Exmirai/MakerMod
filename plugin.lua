@@ -222,7 +222,7 @@ local function mSpawnFX(ply, args)
 	entpos = plypos:MA(makermod.players[ply.id]['arm'], entpos)
 	
 		vars['classname'] = 'fx_runner'
-		vars['fxFile'] = fx
+		vars['fxFile'] = 'effects/' .. fx .. '.efx'
 
 		if args[2] then
 			-- default = 200
@@ -495,7 +495,7 @@ local function mScale(ply, args)
 	end
 end
 
-function mScaleMe(ply, args)
+local function mScaleMe(ply, args)
 	if #args < 1 then return end
 	local ent = ply.entity
 	ent:Scale(tonumber(args[1]))
@@ -525,6 +525,34 @@ local function mPain(ply, args)
 	makermod.players[ply.id]['selected'].spawnflags = makermod.players[ply.id]['selected'].spawnflags | 4
 end
 
+local function mList(ply, args)
+	local string = ''
+	if #args < 1 then 
+		local list = GetFileList('effects/', '/')
+	else
+		local list = GetFileList('effects/' .. args[1], '.efx')
+	end
+	for _,v in pairs(list) do
+		v = string.sub(v, -4)
+		string.format('%s%s\n', string, v)
+		SendReliableCommand(ply.id, string.format("print '%s\n'"))
+	end
+end
+
+local function mListFx(ply, args)
+	local string = ''
+	if #args < 1 then 
+		local list = GetFileList('models/map_objects/', '/')
+	else
+		local list = GetFileList('models/map_objects/' .. args[1], '.md3')
+	end
+	for _,v in pairs(list) do
+		v = string.sub(v, -4)
+		string.format('%s%s\n', string, v)
+		SendReliableCommand(ply.id, string.format("print '%s\n'"))
+	end
+end
+
 AddClientCommand('mplace', mSpawn)
 AddClientCommand('mplacefx', mSpawnFX)
 AddClientCommand('mkill', mKill)
@@ -551,6 +579,8 @@ AddClientCommand('mscale', mScale)
 AddClientCommand('mscaleme', mScaleMe)
 AddClientCommand('mbreakable', mBreakable)
 AddClientCommand('mpain', mPain)
+AddClientCommand('mlist', mList)
+AddClientCommand('mlistfx', mListFx)
 
 --[[
 
