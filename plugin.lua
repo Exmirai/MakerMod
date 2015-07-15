@@ -553,6 +553,12 @@ local function mListFx(ply, args)
 	end
 end
 
+local function mTelesp(ply, args)
+	local list = FindEntityByClassname('info_player_deathmatch')
+	local len = #list
+	local spot = list[math.random(len)]
+	ply:Teleport(spot.position)
+end
 AddClientCommand('mplace', mSpawn)
 AddClientCommand('mplacefx', mSpawnFX)
 AddClientCommand('mkill', mKill)
@@ -581,6 +587,7 @@ AddClientCommand('mbreakable', mBreakable)
 AddClientCommand('mpain', mPain)
 AddClientCommand('mlist', mList)
 AddClientCommand('mlistfx', mListFx)
+AddClientCommand('mtelesp', mTelesp)
 
 --[[
 
