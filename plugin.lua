@@ -39,8 +39,9 @@ local function RemoveEntity(ent)
 		ent:Free()
 end
 
-local function ParseVector(vec, args)
-		for i=1, 3 do
+local function ParseVector(vec, args, startfrom)
+		startfrom = startfrom or 0
+		for i=1+startfrom, 3+startfrom do
 			if i==1 then type = 'x' elseif i==2 then type = 'y' elseif i==3 then type='z' end
 			if args[i] == nil then
 				return vec
@@ -367,7 +368,7 @@ local function mDest(ply, args)
 			local trace = TraceEntity(ply, nil)
 			makermod.objects[makermod.players[ply.id]['selected'].id]['tele_destination'] = Vector3(trace.endpos.x, trace.endpos.y, trace.endpos.z)
 		else
-		 	makermod.objects[makermod.players[ply.id]['selected'].id]['tele_destination'] = ParseVector(ply.position, args)
+		 	makermod.objects[makermod.players[ply.id]['selected'].id]['tele_destination'] = ParseVector(ply.position, args, 0)
 		end
 	end
 end
@@ -458,7 +459,7 @@ local function mMark(ply, args)
 	local vec = ply.position
 	local i, type, res
 	if #args > 1 then
-		vec = ParseVector(vec, args)
+		vec = ParseVector(vec, args, 0)
 	end
 	makermod.players[ply.id]['mark_position'] = vec
 	SendReliableCommand(ply.id, string.format('print "Mark set to (%d %d %d)"', vec.x, vec.y, vec.z))
@@ -480,28 +481,24 @@ end
 
 local function mScale(ply, args)
 	if #args < 1 then return end
-	local vec = Vector3(0,0,0)
 	if args[1] == 'trace' then
 		local trace = TraceEntity(ply, nil)
 		if trace.entityNum >= 0 then
 			local ent = GetEntity(trace.entityNum)
 			if not ent then return end
 			if not CheckEntity(ent, ply) then return end
-			vec = ParseVector(vec, args)
-			ent:Scale(vec)
+			ent:Scale(tonumber(args[2]))
 		end
 	else
 		if not makermod.players[ply.id]['selected'] then return end
-		vec = ParseVector(vec, args)
-		makermod.players[ply.id]['selected']:Scale(vec)
+		makermod.players[ply.id]['selected']:Scale(tonumber(args[1]))
 	end
 end
 
 function mScaleMe(ply, args)
 	if #args < 1 then return end
 	local ent = ply.entity
-	local vec = ParseVector(Vector3(0,0,0), args)
-	ent:Scale(vec)
+	ent:Scale(tonumber(args[1]))
 end
 
 local function mBreakable(ply, args)
