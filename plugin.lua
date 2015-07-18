@@ -300,7 +300,7 @@ end
 
 local function mMove(ply, args)
 	if #args < 1 or #args == 2 then
-		SendReliableCommand(ply.id, string.format('print "Command usage:   ^5/mmove <x> <y> <z>\n^7Command usage:   ^5/mmove <x> <y> <z> <duration> <easing>\n^7Type /mmove list for easing list.\n"'))
+		SendReliableCommand(ply.id, string.format('print "Command usage:   ^5/mmove <speed>\n^7Command usage:   ^5/mmove <x> <y> <z>\n^7Command usage:   ^5/mmove <x> <y> <z> <duration> <easing>\n^7Type /mmove list for easing list.\n"'))
 		return
 	end
 
@@ -312,10 +312,22 @@ local function mMove(ply, args)
 	local ent = makermod.players[ply.id]['selected']
 	if not ent then return end
 
+	if #args == 1 then
+		-- words wrong :()
+		local ma = JPMath.AngleVectors(ply.angles, true, false, false)
+		ma = ply.position:MA(-tonumber(args[1]), ma)
+		x = ma.x
+		y = ma.y
+		z = ma.z
+	else
+		local x = tonumber(args[1]) * 10
+		local y = tonumber(args[2]) * 10
+		local z = tonumber(args[3]) * 10
+	end
+
 	local pos = ent.position
-	-- tonumber rounds coords?
 	if args[4] == '0' then
-		local vec = Vector3(tonumber(args[1]) * 10 + pos.x, tonumber(args[2]) * 10 + pos.y, tonumber(args[3]) * 10 + pos.z)
+		local vec = Vector3(x + pos.x, y + pos.y, z + pos.z)
 		ent.position = vec
 	else
 		-- animation
@@ -324,7 +336,7 @@ local function mMove(ply, args)
 		temp.start = GetRealTime()
 		temp.dur = tonumber(args[4])
 		temp.ease = args[5]
-		temp.coords = Vector3(tonumber(args[1]) * 10, tonumber(args[2]) * 10, tonumber(args[3]) * 10)
+		temp.coords = Vector3(x, y, z)
 		temp.pos = Vector3(pos.x, pos.y, pos.z) -- cloning the vector
 		if not args[5] then
 			temp.ease = 'linear'
