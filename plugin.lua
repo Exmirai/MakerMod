@@ -1,7 +1,10 @@
 local plugin = RegisterPlugin("MakerMod", "2.0")
+require 'Makermod/animation.lua'
 
 makermod = {}
 makermod.objects = {}
+makermod.objects.moving = {} -- for mmove
+makermod.objects.attached = {} -- for mattachfx
 makermod.players = {}
 makermod.cvars = {}
 
@@ -23,13 +26,21 @@ local function MainLoop()
 			ent.angles = ang
 		end
 	end
-	for id, data in pairs(makermod.objects) do
-		local ent = GetEntity(id)
-		if (data['isfx'] ~= false) and (data['attachedto'] ~= 0) and (data['bonename'] ~= '') then
-			local vec = data['attachedto']:GetBoneVector(data['bonename'])
-			ent.position = vec
+
+	for k, v in pairs(makermod.objects.moving) do
+		if AnimStep(v) == false then
+			makermod.objects.moving[k] = nil
 		end
 	end
+
+
+	--for id, data in pairs(makermod.objects) do
+	--	local ent = GetEntity(id)
+	--	if (data['isfx'] ~= false) and (data['attachedto'] ~= 0) and (data['bonename'] ~= '') then
+	--		local vec = data['attachedto']:GetBoneVector(data['bonename'])
+	--		ent.position = vec
+	--	end
+	--end
 end
 
 AddListener('JPLUA_EVENT_RUNFRAME', MainLoop)
@@ -137,16 +148,16 @@ end
 local function CheckEntity(ent, ply)
 		if not makermod.objects[ent.id] then
 			SetupEntity(ent, 'map_object')
-			SendReliableCommand(ply.id, string.format('print "You cannot select map object!"'))
+			SendReliableCommand(ply.id, string.format('print "You cannot select map object!\n"'))
 			return false
 		else
 			local data = makermod.objects[ent.id]
 			if data['owner'] ~= ply then
-				SendReliableCommand(ply.id, string.format('print "You are not owner of this entity!"'))
+				SendReliableCommand(ply.id, string.format('print "You are not owner of this entity!\n"'))
 				return false
 			end
 			if data['owner'] == 'map_object' then
-				SendReliableCommand(ply.id, string.format('print "You cannot select map object!"'))
+				SendReliableCommand(ply.id, string.format('print "You cannot select map object!\n"'))
 				return false
 			end
 		end
@@ -177,7 +188,7 @@ AddListener('JPLUA_EVENT_CLIENTDISCONNECT',onUserDisconnect)
 
 local function mSpawn(ply, args)
 	if #args < 1 then
-		SendReliableCommand(ply.id, string.format('print "Command usage:   ^5/mplace <foldername/modelname>\n^7Command usage:   ^5/mplace <special-ob-name> <optional-special-ob-parameters>"'))
+		SendReliableCommand(ply.id, string.format('print "Command usage:   ^5/mplace <foldername/modelname>\n^7Command usage:   ^5/mplace <special-ob-name> <optional-special-ob-parameters>\n"'))
 		return
 	end
 
@@ -201,15 +212,13 @@ local function mSpawn(ply, args)
 	if makermod.players[ply.id]['autograbbing'] then
 		makermod.players[ply.id]['grabbed'] = ent
 	else
-		-- todo: cloning
-		-- because the position - the link to the object
 		ent.position = makermod.players[ply.id]['mark_position'];
 	end
 end
 
 local function mSpawnFX(ply, args)
 	if #args < 1 then
-		SendReliableCommand(ply.id, string.format('print "Command usage:   ^5/mplacefx <effectname> <delay-between-firings-in-milliseconds> <optional-random-delay-component-in-ms>\n^71 second is 1000 milliseconds"'))
+		SendReliableCommand(ply.id, string.format('print "Command usage:   ^5/mplacefx <effectname> <delay-between-firings-in-milliseconds> <optional-random-delay-component-in-ms>\n^71 second is 1000 milliseconds\n"'))
 		return
 	end
 
@@ -222,7 +231,7 @@ local function mSpawnFX(ply, args)
 	entpos = plypos:MA(makermod.players[ply.id]['arm'], entpos)
 	
 		vars['classname'] = 'fx_runner'
-		vars['fxFile'] = 'effects/' .. fx .. '.efx'
+		vars['fxFile'] = fx
 
 		if args[2] then
 			-- default = 200
@@ -290,9 +299,41 @@ local function mKill(ply, args)
 end
 
 local function mMove(ply, args)
-	if not makermod.players[ply.id]['selected'] then return end
-	local vec = Vector3(args[1], args[2], args[3])
-	makermod.players[ply.id]['selected'].position = vec
+	if #args < 1 or #args == 2 then
+		SendReliableCommand(ply.id, string.format('print "Command usage:   ^5/mmove <x> <y> <z>\n^7Command usage:   ^5/mmove <x> <y> <z> <duration> <easing>\n^7Type /mmove list for easing list.\n"'))
+		return
+	end
+
+	if args[1] == 'list' then
+		SendReliableCommand(ply.id, string.format('print "%s.\n"', easinglist))
+		return
+	end
+
+	local ent = makermod.players[ply.id]['selected']
+	if not ent then return end
+
+	local pos = ent.position
+	-- tonumber rounds coords?
+	if args[4] == '0' then
+		local vec = Vector3(tonumber(args[1]) * 10 + pos.x, tonumber(args[2]) * 10 + pos.y, tonumber(args[3]) * 10 + pos.z)
+		ent.position = vec
+	else
+		-- animation
+		local temp = {}
+		temp.ent = ent
+		temp.start = GetRealTime()
+		temp.dur = tonumber(args[4])
+		temp.ease = args[5]
+		temp.coords = Vector3(tonumber(args[1]) * 10, tonumber(args[2]) * 10, tonumber(args[3]) * 10)
+		temp.pos = Vector3(pos.x, pos.y, pos.z) -- cloning the vector
+		if not args[5] then
+			temp.ease = 'linear'
+			if not args[4] then
+				temp.dur = 5000
+			end
+		end
+		makermod.objects.moving[#makermod.objects.moving + 1] = temp
+	end
 end
 
 local function mRotate(ply, args)
@@ -313,7 +354,7 @@ local function mConnectTo(ply, args)
 			data1['connectedTo'][#data1['connectedTo']+1] = ent
 			data2['connectedFrom'][#data2['connectedFrom']+1] = makermod.players[ply.id]['selected']
 	else
-		SendReliableCommand(ply.id, string.format('print "0 entity traced"'))
+		SendReliableCommand(ply.id, string.format('print "0 entity traced\n"'))
 		return 
 	end
 	
@@ -375,7 +416,7 @@ end
 
 local function mArm(ply, args)
 	if #args < 1 then
-		SendReliableCommand(ply.id, string.format('print "Marm: %d"', makermod.players[ply.id]['arm']))
+		SendReliableCommand(ply.id, string.format('print "Marm: %d\n"', makermod.players[ply.id]['arm']))
 		return
 	end
 	local arm = args[1]
@@ -385,10 +426,10 @@ end
 local function mGrabbing(ply, args)
 	if makermod.players[ply.id]['autograbbing'] then
 		makermod.players[ply.id]['autograbbing'] = false
-		SendReliableCommand(ply.id, string.format('print "^3Autograbbing - ^1disabled"'))
+		SendReliableCommand(ply.id, string.format('print "Automatic Grabbing OFF.\n"'))
 	else
 		makermod.players[ply.id]['autograbbing'] = true
-		SendReliableCommand(ply.id, string.format('print "^3Autograbbing - ^2enabled"'))
+		SendReliableCommand(ply.id, string.format('print "Automatic Grabbing ON.\n"'))
 	end
 end
 
@@ -461,13 +502,17 @@ local function mMark(ply, args)
 	if #args > 1 then
 		vec = ParseVector(vec, args, 0)
 	end
+	if not makermod.players[ply.id]['mark_position'] then
+		makermod.players[ply.id]['autograbbing'] = false
+		SendReliableCommand(ply.id, string.format('print "Automatic Grabbing OFF. Use /mgrabbing to turn it back on.\n"'))
+	end
 	makermod.players[ply.id]['mark_position'] = vec
-	SendReliableCommand(ply.id, string.format('print "Mark set to (%d %d %d)"', vec.x, vec.y, vec.z))
+	SendReliableCommand(ply.id, string.format('print "Marked: (%d %d %d)\n"', math.floor(vec.x), math.floor(vec.y), math.floor(vec.z)))
 end
 
 local function mOrigin(ply)
 	local vec = ply.position
-	SendReliableCommand(ply.id, string.format('print "Origin: (%d %d %d)"', vec.x, vec.y, vec.z))
+	SendReliableCommand(ply.id, string.format('print "Origin: (%d %d %d)\n"', vec.x, vec.y, math.floor(vec.z)))
 end
 
 local function mAttachFx(ply, args)
@@ -525,17 +570,27 @@ local function mPain(ply, args)
 	makermod.players[ply.id]['selected'].spawnflags = makermod.players[ply.id]['selected'].spawnflags | 4
 end
 
+
+
 local function mList(ply, args)
 	local string = ''
-	if #args < 1 then 
-		local list = GetFileList('effects/', '/')
-	else
-		local list = GetFileList('effects/' .. args[1], '.efx')
+
+	local list = GetFileList('models/map_objects/', 'md3')
+	local function isHas(object, value)
+		for _, v in pairs(object) do
+			if v == value then
+				return true
+			end
+		end
+		return false
 	end
-	for _,v in pairs(list) do
-		v = string.sub(v, -4)
-		string.format('%s%s\n', string, v)
-		SendReliableCommand(ply.id, string.format("print '%s\n'"))
+
+	local models = {}
+	for _, v in pairs(list) do
+		if not isHas(models, v) then
+			models[#models + 1] = v
+			SendReliableCommand(ply.id, "print '" .. string.gsub(v, '.md3', '') .. "\n'")
+		end
 	end
 end
 
@@ -559,6 +614,7 @@ local function mTelesp(ply, args)
 	local spot = list[math.random(len)]
 	ply:Teleport(spot.position)
 end
+
 AddClientCommand('mplace', mSpawn)
 AddClientCommand('mplacefx', mSpawnFX)
 AddClientCommand('mkill', mKill)
