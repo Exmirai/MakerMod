@@ -40,13 +40,26 @@ end
 -- for mmove list
 easinglist = 'linear, swing, spring, pulse, wobble, ease, cubic, quart, quint, expo, circ, sine, back, bounce, elastic'
 
+-- WIP movings
+local steps = {}
+steps['ellipse'] = function(object)
+	local now = GetRealTime()
+	local period = 1000
+	local delta = (now - object.start) % period
+	local t = delta / period
+	local ang = t * 2 * 3.14159265358979
+	local center = object.center
+
+	local pos = Vector3(center.x + object.rx * math.cos(ang), center.y + object.ry * math.sin(ang), center.z)
+
+	object.ent.position = pos
+end
+
 function AnimStep(object)
 
---		temp.ent = ent
---		temp.start = GetRealTime()
---		temp.dur = dur
---		temp.ease = ease
---		temp.coords = vec
+	if object.movingType and steps[object.movingType] then
+		return steps[object.movingType](object)
+	end
 
 	local cur = GetRealTime()
 	local delta = cur - object.start

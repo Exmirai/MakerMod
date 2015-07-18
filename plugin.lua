@@ -34,7 +34,7 @@ local function MainLoop()
 	end
 
 
-	--for id, data in pairs(makermod.objects) do
+	-- for id, data in pairs(makermod.objects) do
 	--	local ent = GetEntity(id)
 	--	if (data['isfx'] ~= false) and (data['attachedto'] ~= 0) and (data['bonename'] ~= '') then
 	--		local vec = data['attachedto']:GetBoneVector(data['bonename'])
@@ -313,7 +313,7 @@ local function mMove(ply, args)
 	if not ent then return end
 
 	if #args == 1 then
-		-- words wrong :()
+		-- works wrong :(
 		local ma = JPMath.AngleVectors(ply.angles, true, false, false)
 		ma = ply.position:MA(-tonumber(args[1]), ma)
 		x = ma.x
@@ -627,6 +627,24 @@ local function mTelesp(ply, args)
 	ply:Teleport(spot.position)
 end
 
+local function mEllipse(ply, args)
+	local rx = tonumber(args[1])
+	if args[2] then
+		local ry = tonumber(args[2])
+	else
+		local ry = rx
+	end
+
+	local temp = {}
+	temp.movingType = 'ellipse'
+	temp.ent = ent
+	temp.start = GetRealTime()
+	temp.rx = rx
+	temp.ry = ry
+	temp.center = ply.position
+	makermod.objects.moving[#makermod.objects.moving + 1] = temp
+end
+
 AddClientCommand('mplace', mSpawn)
 AddClientCommand('mplacefx', mSpawnFX)
 AddClientCommand('mkill', mKill)
@@ -656,6 +674,8 @@ AddClientCommand('mpain', mPain)
 AddClientCommand('mlist', mList)
 AddClientCommand('mlistfx', mListFx)
 AddClientCommand('mtelesp', mTelesp)
+
+AddClientCommand('mellipse', mEllipse)
 
 --[[
 
