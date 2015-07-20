@@ -13,6 +13,7 @@ makermod.cvars['pain_maxdmg'] = CreateCvar('makermod_pain_maxdamage', '100000000
 
 local function BlankFunc() end -----fucking lua without 'continue' statement
 
+
 local function MainLoop()
 	for id,data in pairs(makermod.players) do
 		local ply = GetPlayer(id)
@@ -34,8 +35,6 @@ local function MainLoop()
 	end
 
 	for k, v in pairs(makermod.objects.attached) do
-		-- r_hand; *r_hand
-		-- bone, ply, ent
 		local vec = v['ply']:GetBoneVector(v['bone'])
 		v['ent'].position = vec
 	end
@@ -44,8 +43,20 @@ end
 AddListener('JPLUA_EVENT_RUNFRAME', MainLoop)
 
 local function RemoveEntity(ent)
-		makermod.objects[ent.id] = nil
-		ent:Free()
+	for k, v in pairs(makermod.objects.moving) do
+		if v.ent == ent then
+			makermod.objects.moving[k] = nil
+		end
+	end
+
+	for k, v in pairs(makermod.objects.attached) do
+		if v.ent == ent then
+			makermod.objects.attached[k] = nil
+		end
+	end
+
+	makermod.objects[ent.id] = nil
+	ent:Free()
 end
 
 local function ParseVector(vec, args, startfrom)
@@ -305,6 +316,7 @@ local function mMove(ply, args)
 	local ent = makermod.players[ply.id]['selected']
 	if not ent then return end
 
+	local x, y, z
 	if #args == 1 then
 		-- works wrong :(
 		local ma = JPMath.AngleVectors(ply.angles, true, false, false)
@@ -313,9 +325,9 @@ local function mMove(ply, args)
 		y = ma.y
 		z = ma.z
 	else
-		local x = tonumber(args[1]) * 10
-		local y = tonumber(args[2]) * 10
-		local z = tonumber(args[3]) * 10
+		x = tonumber(args[1]) * 10
+		y = tonumber(args[2]) * 10
+		z = tonumber(args[3]) * 10
 	end
 
 	local pos = ent.position
@@ -325,6 +337,7 @@ local function mMove(ply, args)
 	else
 		-- animation
 		local temp = {}
+		temp.movingType = 'move'
 		temp.ent = ent
 		temp.start = GetRealTime()
 		temp.dur = tonumber(args[4])
