@@ -17,14 +17,15 @@ local function BlankFunc() end -----fucking lua without 'continue' statement
 local function MainLoop()
 	for id,data in pairs(makermod.players) do
 		local ply = GetPlayer(id)
-		if makermod.players[ply.id]['grabbed'] then 
-			local ent = makermod.players[ply.id]['grabbed']
-			local temp = JPMath.AngleVectors(ply.angles, true, false, false)
-			temp = ply.position:MA(makermod.players[ply.id]['arm'], temp)
-			ent.position = temp
-			local ang = ply.angles
-			ang.x = ent.angles.x
-			ent.angles = ang
+		if #makermod.players[ply.id]['grabbed'] > 0 then
+			for k, ent in pairs(makermod.players[ply.id]['grabbed']) do
+				local temp = JPMath.AngleVectors(ply.angles, true, false, false)
+				temp = ply.position:MA(makermod.players[ply.id]['arm'], temp)
+				ent.position = temp
+				local ang = ply.angles
+				ang.x = ent.angles.x
+				ent.angles = ang
+			end
 		end
 	end
 
@@ -172,7 +173,7 @@ local function OnUserSpawn(ply, firsttime)
 	if makermod.players[ply.id] then return end
 	makermod.players[ply.id] = {}
 	makermod.players[ply.id]['selected'] = nil
-	makermod.players[ply.id]['grabbed'] = nil
+	makermod.players[ply.id]['grabbed'] = {}
 	makermod.players[ply.id]['arm'] = 200
 	makermod.players[ply.id]['autograbbing'] = true
 	makermod.players[ply.id]['objects'] = {}
@@ -214,7 +215,7 @@ local function mSpawn(ply, args)
 	makermod.players[ply.id]['objects'][#makermod.players[ply.id]['objects']+1] = ent
 	makermod.players[ply.id]['selected'] = ent
 	if makermod.players[ply.id]['autograbbing'] then
-		makermod.players[ply.id]['grabbed'] = ent
+		makermod.players[ply.id]['grabbed'][#makermod.players[ply.id]['grabbed'] + 1] = ent
 	else
 		ent.position = makermod.players[ply.id]['mark_position'];
 	end
@@ -254,7 +255,7 @@ local function mSpawnFX(ply, args)
 	makermod.players[ply.id]['objects'][#makermod.players[ply.id]['objects']+1] = ent
 	makermod.players[ply.id]['selected'] = ent
 	if makermod.players[ply.id]['autograbbing'] then
-		makermod.players[ply.id]['grabbed'] = ent
+		makermod.players[ply.id]['grabbed'][#makermod.players[ply.id]['grabbed'] + 1] = ent
 	else
 		ent.position = makermod.players[ply.id]['mark_position'];
 	end
@@ -465,13 +466,20 @@ local function mSelect(ply, args)
 end
 
 local function mDrop(ply, args)
-	if not makermod.players[ply.id]['grabbed'] then return end
-	makermod.players[ply.id]['grabbed'] = nil
+	if args[1] == 'all' then
+		makermod.players[ply.id]['grabbed'] = {}
+		return
+	end
+	for k, v in pairs(makermod.players[ply.id]['grabbed']) do
+		if v == makermod.players[ply.id]['selected'] then
+			makermod.players[ply.id]['grabbed'][k] = nil
+		end
+	end
 end
 
 local function mGrab(ply, args)
 	if not makermod.players[ply.id]['selected'] then return end
-	makermod.players[ply.id]['grabbed'] = makermod.players[ply.id]['selected']
+	makermod.players[ply.id]['grabbed'][#makermod.players[ply.id]['grabbed'] + 1] = makermod.players[ply.id]['selected']
 end
 
 local function mSetPassword(ply, args)
