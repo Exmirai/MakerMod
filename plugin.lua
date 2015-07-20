@@ -33,6 +33,12 @@ local function MainLoop()
 		end
 	end
 
+	for k, v in pairs(makermod.objects.attached) do
+		-- r_hand; *r_hand
+		-- bone, ply, ent
+		local vec = v['ply']:GetBoneVector('r_hand')
+		v['ent'].position = vec
+	end
 
 	-- for id, data in pairs(makermod.objects) do
 	--	local ent = GetEntity(id)
@@ -165,7 +171,7 @@ local function CheckEntity(ent, ply)
 end
 
 local function OnUserSpawn(ply, firsttime)
- 	if not firsttime then return end
+	if makermod.players[ply.id] then return end
 	makermod.players[ply.id] = {}
 	makermod.players[ply.id]['selected'] = nil
 	makermod.players[ply.id]['grabbed'] = nil
@@ -530,10 +536,15 @@ end
 local function mAttachFx(ply, args)
 	if not makermod.players[ply.id]['selected'] then return end
 	if #args < 1 then return end
-	local data = makermod.objects[makermod.players[ply.id]['selected'].id]
-	local bone = args[1]
-	data['attachedto'] = ply.entity
-	data['bonename'] = bone
+	local temp = {}
+	temp['bone'] = args[1]
+	temp['ply'] = ply.entity
+	temp['ent'] = makermod.players[ply.id]['selected']
+	makermod.objects.attached[#makermod.objects.attached + 1] = temp
+--	local data = makermod.objects[makermod.players[ply.id]['selected'].id]
+--	local bone = args[1]
+--	data['ply'] = ply.entity
+--	data['bone'] = bone
 end
 
 local function mScale(ply, args)
