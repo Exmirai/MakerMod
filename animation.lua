@@ -43,15 +43,15 @@ easinglist = 'linear, swing, spring, pulse, wobble, ease, cubic, quart, quint, e
 -- WIP movings
 local steps = {}
 steps['ellipse'] = function(object)
+
 	local now = GetRealTime()
-	local period = 1000
+	local period = object.period
 	local delta = (now - object.start) % period
 	local t = delta / period
 	local ang = t * 2 * 3.14159265358979
 	local center = object.center
 
 	local pos = Vector3(center.x + object.rx * math.cos(ang), center.y + object.ry * math.sin(ang), center.z)
-
 	object.ent.position = pos
 end
 

@@ -628,12 +628,28 @@ local function mTelesp(ply, args)
 end
 
 local function mEllipse(ply, args)
-	local rx = tonumber(args[1])
-	if args[2] then
-		local ry = tonumber(args[2])
-	else
-		local ry = rx
+	if #args < 1 then
+		SendReliableCommand(ply.id, string.format('print "Command usage:   ^5/mellipse <radius>\n^7Command usage:   ^5/mellipse <rx> <ry>\n^7Command usage:   ^5/mellipse <rx> <ry> <period-in-milliseconds>\n"'))
+		return
 	end
+	local rx = tonumber(args[1])
+	local ry = args[2]
+	local period = args[3]
+
+	if not ry then
+		ry = rx
+	else
+		ry = tonumber(ry)
+	end
+
+	if not period then
+		period = 1000
+	else
+		period = tonumber(period)
+	end
+
+	local ent = makermod.players[ply.id]['selected']
+	if not ent then return end
 
 	local temp = {}
 	temp.movingType = 'ellipse'
@@ -642,6 +658,7 @@ local function mEllipse(ply, args)
 	temp.rx = rx
 	temp.ry = ry
 	temp.center = ply.position
+	temp.period = period
 	makermod.objects.moving[#makermod.objects.moving + 1] = temp
 end
 
