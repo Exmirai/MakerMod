@@ -36,7 +36,8 @@ local function MainLoop()
 	end
 
 	for k, v in pairs(makermod.objects.attached) do
-		local vec = v['ply']:GetBoneVector(v['bone'])
+		local bone = v['ply']:GetBoneVector(v['bone'])
+		local vec = Vector3(bone.x + v['x'], bone.y + v['y'], bone.z + v['z'])
 		v['ent'].position = vec
 	end
 end
@@ -267,10 +268,13 @@ local function mKill(ply, args)
 		local ent = makermod.players[ply.id]['selected']
 		if not ent then return end
 
-		makermod.players[ply.id]['selected'] = nil
-		if makermod.players[ply.id]['grabbed'] == ent then
-			makermod.players[ply.id]['grabbed'] = nil
+		for k, v in pairs(makermod.players[ply.id]['grabbed']) do
+			if v == ent then
+				makermod.players[ply.id]['grabbed'][k] = nil
+			end
 		end
+
+		makermod.players[ply.id]['selected'] = nil
  		RemoveEntity(ent)
 	elseif mode == 'trace' then
 		local trace = TraceEntity(ply, nil)
@@ -548,6 +552,15 @@ local function mAttachFx(ply, args)
 	temp['bone'] = args[1]
 	temp['ply'] = ply.entity
 	temp['ent'] = makermod.players[ply.id]['selected']
+	if #args > 1 then
+		temp['x'] = tonumber(args[2])
+		temp['y'] = tonumber(args[3])
+		temp['z'] = tonumber(args[4])
+	else
+		temp['x'] = 0
+		temp['y'] = 0
+		temp['z'] = 0
+	end
 	makermod.objects.attached[#makermod.objects.attached + 1] = temp
 end
 
@@ -677,6 +690,66 @@ local function mEllipse(ply, args)
 	makermod.objects.moving[#makermod.objects.moving + 1] = temp
 end
 
+local function mAstroid(ply, args)
+	if #args < 1 then
+		return
+	end
+	local rx = tonumber(args[1])
+	local ry = args[2]
+	local period = args[3]
+
+	if not ry then
+		ry = rx
+	else
+		ry = tonumber(ry)
+	end
+
+	if not period then
+		period = 1000
+	else
+		period = tonumber(period)
+	end
+
+	local ent = makermod.players[ply.id]['selected']
+	if not ent then return end
+
+	local temp = {}
+	temp.movingType = 'astroid'
+	temp.ent = ent
+	temp.start = GetRealTime()
+	temp.rx = rx
+	temp.ry = ry
+	temp.center = ply.position
+	temp.period = period
+	makermod.objects.moving[#makermod.objects.moving + 1] = temp
+end
+
+local function mSpiral(ply, args)
+	if #args < 1 then
+		return
+	end
+	local k = tonumber(args[1])
+	local period = args[2]
+
+	if not period then
+		period = 1000
+	else
+		period = tonumber(period)
+	end
+
+	local ent = makermod.players[ply.id]['selected']
+	if not ent then return end
+
+	local temp = {}
+	temp.movingType = 'spiral'
+	temp.ent = ent
+	temp.start = GetRealTime()
+	temp.k = k
+	temp.center = ply.position
+	temp.period = period
+	makermod.objects.moving[#makermod.objects.moving + 1] = temp
+end
+
 AddClientCommand('mplace', mSpawn)
 AddClientCommand('mplacefx', mSpawnFX)
 AddClientCommand('mkill', mKill)
@@ -708,6 +781,8 @@ AddClientCommand('mlistfx', mListFx)
 AddClientCommand('mtelesp', mTelesp)
 
 AddClientCommand('mellipse', mEllipse)
+AddClientCommand('mastroid', mAstroid)
+AddClientCommand('mspiral', mSpiral)
 
 --[[
 

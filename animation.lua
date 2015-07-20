@@ -167,6 +167,33 @@ steps['ellipse'] = function(object)
 	object.ent.position = pos
 end
 
+steps['astroid'] = function(object)
+
+	local now = GetRealTime()
+	local period = object.period
+	local delta = (now - object.start) % period
+	local t = delta / period
+	local ang = t * 2 * 3.14159265358979
+	local center = object.center
+
+	local pos = Vector3(center.x + object.rx * ((math.cos(ang)) ^ 3), center.y + object.ry * ((math.sin(ang)) ^ 3), center.z)
+	object.ent.position = pos
+end
+
+steps['spiral'] = function(object)
+
+	local now = GetRealTime()
+	local period = object.period
+	local delta = (now - object.start)
+	local t = delta / period
+	local phi = t * 2 * 3.14159265358979
+	local r = object.k * phi
+	local center = object.center
+
+	local pos = Vector3(center.x + r * math.cos(phi), center.y + r * math.sin(phi), center.z)
+	object.ent.position = pos
+end
+
 function AnimStep(object)
 
 	if object.movingType and steps[object.movingType] then
