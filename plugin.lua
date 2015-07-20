@@ -36,17 +36,9 @@ local function MainLoop()
 	for k, v in pairs(makermod.objects.attached) do
 		-- r_hand; *r_hand
 		-- bone, ply, ent
-		local vec = v['ply']:GetBoneVector('r_hand')
+		local vec = v['ply']:GetBoneVector(v['bone'])
 		v['ent'].position = vec
 	end
-
-	-- for id, data in pairs(makermod.objects) do
-	--	local ent = GetEntity(id)
-	--	if (data['isfx'] ~= false) and (data['attachedto'] ~= 0) and (data['bonename'] ~= '') then
-	--		local vec = data['attachedto']:GetBoneVector(data['bonename'])
-	--		ent.position = vec
-	--	end
-	--end
 end
 
 AddListener('JPLUA_EVENT_RUNFRAME', MainLoop)
@@ -92,11 +84,6 @@ local function SetupEntity(ent, ply)
 		temp['password'] = ''
 		temp['name'] = ''
 		temp['tele_destination'] = nil
-		----fx data
-		temp['isfx'] = false
-		temp['attachedto'] = 0
-		temp['bonename'] = ''
-		----mPain
 		 
 		
 		
@@ -541,10 +528,6 @@ local function mAttachFx(ply, args)
 	temp['ply'] = ply.entity
 	temp['ent'] = makermod.players[ply.id]['selected']
 	makermod.objects.attached[#makermod.objects.attached + 1] = temp
---	local data = makermod.objects[makermod.players[ply.id]['selected'].id]
---	local bone = args[1]
---	data['ply'] = ply.entity
---	data['bone'] = bone
 end
 
 local function mScale(ply, args)
