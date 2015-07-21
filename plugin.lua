@@ -299,20 +299,19 @@ local function mKill(ply, args)
 		makermod.players[ply.id]['grabbed'] = nil
 		for _, ent in pairs(makermod.players[ply.id]['objects']) do
 			if ent then
-				makermod.objects[ent.id] = nil
-				ent:Free()
+				RemoveEntity(ent)
+				makermod.players[ply.id]['objects'][ent] = nil
 			end
 		end
-		makermod.players[ply.id]['objects'] = {}
 	end
 end
 
 local function mMove(ply, args)
-	if #args < 1 or #args == 2 then
+	if #args < 1 then
 		SendReliableCommand(ply.id, string.format('print "Command usage:   ^5/mmove <speed>\n^7Command usage:   ^5/mmove <x> <y> <z>\n^7Command usage:   ^5/mmove <x> <y> <z> <duration> <easing>\n^7Type /mmove list for easing list.\n"'))
 		return
 	end
-
+	
 	if args[1] == 'list' then
 		SendReliableCommand(ply.id, string.format('print "%s.\n"', easinglist))
 		return
@@ -321,39 +320,67 @@ local function mMove(ply, args)
 	local ent = makermod.players[ply.id]['selected']
 	if not ent then return end
 
-	local x, y, z
-	if #args == 1 then
-		-- works wrong :(
+	local destination = ent.position
+	local duration = -1
+	local easing = -1
+	if #args == 1 then -- move in eye direction
 		local ma = JPMath.AngleVectors(ply.angles, true, false, false)
-		ma = ply.position:MA(-tonumber(args[1]), ma)
-		x = ma.x
-		y = ma.y
-		z = ma.z
-	else
-		x = tonumber(args[1]) * 10
-		y = tonumber(args[2]) * 10
-		z = tonumber(args[3]) * 10
+		destinaion = ply.position:MA(tonumber(args[1]), ma)
+		ent.position = destination
+		return
+	elseif #args > 2 then -- move in X/Y/Z + select duration and easing
+		local i, j,res,s,e
+		for i=1, #args do
+				for j=i, 3 do --- try to parse direction
+					if i==1 then type = 'x' elseif i==2 then type = 'y' elseif i==3 then type='z' else type='' end  
+					res = string.match(args[i], "(%d+)")
+					if res and (type == 'x' or type == 'y' or type == 'z') then
+						destination[type] = res
+					else
+						break ---numbers not found
+					end
+				end
+				-----try to parse duration and easing
+				s,e = string.match(args[i], "duration")
+				if res then 
+					local str = args[i]
+					str = string.sub(str, e+2)
+					res = string.match(str, "(%d+)")
+					if res then
+						duration = res
+					end
+				end
+				s,e = string.match(args[i], "easing")
+				if res then 
+					local str = args[i]
+					str = string.sub(str, e+2)
+					res = string.match(str, "(%a+)")
+					if res and makermod.easing[res] then
+						easing = res
+					end
+				end
+		end
 	end
 
-	local pos = ent.position
-	if args[4] == '0' then
-		local vec = Vector3(x + pos.x, y + pos.y, z + pos.z)
-		ent.position = vec
+	if duration == 0 then
+		ent.position = destination
 	else
 		-- animation
 		local temp = {}
 		temp.movingType = 'move'
 		temp.ent = ent
 		temp.start = GetRealTime()
-		temp.dur = tonumber(args[4])
-		temp.ease = args[5]
-		temp.coords = Vector3(x, y, z)
-		temp.pos = Vector3(pos.x, pos.y, pos.z) -- cloning the vector
-		if not args[5] then
+		temp.coords = destination
+		temp.pos = ent.position -- cloning the vector
+		if easing == -1 then
 			temp.ease = 'linear'
-			if not args[4] then
-				temp.dur = 5000
-			end
+		else
+			temp.ease = easing
+		end
+		if duration == -1 then
+			temp.dur = 5000
+		else
+			temp.dur = duration
 		end
 		makermod.objects.moving[#makermod.objects.moving + 1] = temp
 	end

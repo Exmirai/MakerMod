@@ -1,4 +1,7 @@
 local easing = {}
+if makermod then
+	makermod.easing = easing
+end
 easing['linear'] = function(n) return n end
 easing['swing'] = function(x) return (math.cos(x * math.pi) / -2) + 0.5 end
 easing['spring'] = function(x) return 1 - (math.cos(x * 4.5 * math.pi) * math.exp(x * -6)) end
