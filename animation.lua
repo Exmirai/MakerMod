@@ -198,6 +198,23 @@ steps['spiral'] = function(object)
 	object.ent.position = pos
 end
 
+steps['rotate'] = function(object)
+	
+	local now = GetRealTime()
+	local delta = now - object.start
+	if delta > object.dur then
+		return false
+	end
+
+	local t = delta / object.dur
+	if object.ease ~= 'linear' and easing[object.ease] then
+		t = easing[object.ease](t)
+	end
+
+	local angles = Vector3(object.from.x + object.angle.x * t, object.from.y + object.angle.y * t, object.from.z + object.angle.z * t)
+	object.ent.angles = angles
+end
+
 function AnimStep(object)
 
 	if object.movingType and steps[object.movingType] then

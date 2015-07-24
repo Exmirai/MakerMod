@@ -106,6 +106,7 @@ local function SetupEntity(ent, ply)
 		
 		
 	local touchfunc = function(ent, from, trace)
+		print('a')
 						for _, r in pairs(temp['touchfuncs']) do ---Check Internal functions
 							pcall(r, ent, from, trace)
 						end
@@ -314,7 +315,7 @@ end
 
 local function mMoveTime(ply, args)
 	if #args < 1 then
-		SendReliableCommand(ply.id, string.format('print "Mmove time: %d\n"', makermod.players[ply.id]['movetime']))
+		SendReliableCommand(ply.id, string.format('print "Your mmove time: %d ms (%d s)\n"', makermod.players[ply.id]['movetime'], makermod.players[ply.id]['movetime'] / 1000))
 		return
 	end
 	local time = args[1]
@@ -330,6 +331,7 @@ local function mMove(ply, args)
 
 	-- easing functions list
 	if args[1] == 'list' then
+		-- todo: minfo easing
 		SendReliableCommand(ply.id, string.format('print "%s.\n"', easinglist))
 		return
 	end
@@ -337,7 +339,13 @@ local function mMove(ply, args)
 
 	local ent = makermod.players[ply.id]['selected']
 	if not ent then return end
-	StopEntity(ent)
+
+	-- stopping the current moving
+	for k, v in pairs(makermod.objects.moving) do
+		if v.ent == ent and v.movingType == 'move' then
+			makermod.objects.moving[k] = nil
+		end
+	end
 
 	-- parsing the args:
 
@@ -418,91 +426,77 @@ local function mMove(ply, args)
 	end
 end
 
---[[
-local function mMove(ply, args)
+local function mRotate(ply, args)
+	-- wrong syntax
 	if #args < 1 then
-		SendReliableCommand(ply.id, string.format('print "Command usage:   ^5/mmove <speed>\n^7Command usage:   ^5/mmove <x> <y> <z>\n^7Command usage:   ^5/mmove <x> <y> <z> <duration> <easing>\n^7Type /mmove list for easing list.\n"'))
-		return
-	end
-	
-	if args[1] == 'list' then
-		SendReliableCommand(ply.id, string.format('print "%s.\n"', easinglist))
+		SendReliableCommand(ply.id, 'print "Command usage:   ^5/mrotate <x> <y> <z>\n^7Command usage:   ^5/mrotate <x> <y> <z> <duration> <easing>\n^7Type /mmove list for easing list.\n"')
 		return
 	end
 
 	local ent = makermod.players[ply.id]['selected']
 	if not ent then return end
 
-	local destination = ent.position
-	local duration = -1
-	local easing = -1
-	if #args == 1 then -- move in eye direction
-		local ma = JPMath.AngleVectors(ply.angles, true, false, false)
-		destinaion = ply.position:MA(tonumber(args[1]), ma)
-		ent.position = destination
-		return
-	elseif #args > 2 then -- move in X/Y/Z + select duration and easing
-		local i, j,res,s,e
-		for i=1, #args do
-				for j=i, 3 do --- try to parse direction
-					if i==1 then type = 'x' elseif i==2 then type = 'y' elseif i==3 then type='z' else type='' end  
-					res = string.match(args[i], "(%d+)")
-					if res and (type == 'x' or type == 'y' or type == 'z') then
-						destination[type] = res
-					else
-						break ---numbers not found
-					end
-				end
-				-----try to parse duration and easing
---				s,e = string.match(args[i], "duration")
---				if res then 
---					local str = args[i]
---					str = string.sub(str, e+2)
---					res = string.match(str, "(%d+)")
---					if res then
---						duration = res
---					end
---				end
---				s,e = string.match(args[i], "easing")
---				if res then 
---					local str = args[i]
---					str = string.sub(str, e+2)
---					res = string.match(str, "(%a+)")
---					if res and makermod.easing[res] then
---						easing = res
---					end
---				end
+	-- stopping the current moving
+	for k, v in pairs(makermod.objects.moving) do
+		if v.ent == ent and v.movingType == 'rotate' then
+			makermod.objects.moving[k] = nil
 		end
 	end
 
-	if duration == 0 then
-		ent.position = destination
+	if #args == 1 then
+		-- mrotate 0 -- for stopping rotating
+		-- mrotate clear -- clear angle
+		if args[1] == "clear" then
+			ent.angles = Vector3(0, 0, 0)
+		end
+		return
+	end
+
+	-- parsing the args:
+
+	-- mrotate x y z
+	-- mrotate x y z dur
+	-- mrotate x y z dur easing
+	-- mrotate x y z easing
+	local angle = Vector3(tonumber(args[1]), tonumber(args[2]), tonumber(args[3]))
+	local dur = makermod.players[ply.id]['movetime']
+	local ease = 'linear'
+
+	if #args > 3 then
+		if #args == 4 then
+			if makermod.easing[args[4]] then
+				-- mrotate <x> <y> <z> <easing>
+				ease = args[4]
+			else
+				-- mrotate <x> <y> <z> <duration>
+				dur = args[4]
+			end
+		else
+			-- mrotate <x> <y> <z> <duration> <easing>
+			dur = args[4]
+			ease = args[5]
+		end
+	end
+
+	if angle == Vector3(0, 0, 0) then return end
+
+	dur = tonumber(dur)
+
+	-- moving
+	if dur == 0 then
+		ent.angles = ent.angles + angle
 	else
 		-- animation
-		local temp = {}
-		temp.movingType = 'move'
-		temp.ent = ent
-		temp.start = GetRealTime()
-		temp.coords = destination
-		temp.pos = ent.position -- cloning the vector
-		if easing == -1 then
-			temp.ease = 'linear'
-		else
-			temp.ease = easing
-		end
-		if duration == -1 then
-			temp.dur = 5000
-		else
-			temp.dur = duration
-		end
-		makermod.objects.moving[#makermod.objects.moving + 1] = temp
+		local data = {}
+		data.movingType = 'rotate'
+		data.ent = ent
+		data.start = GetRealTime()
+		data.angle = angle
+		data.from = ent.angles
+		data.ease = ease
+		data.dur = dur
+		makermod.objects.moving[#makermod.objects.moving + 1] = data
 	end
-end ]]--
-
-local function mRotate(ply, args)
-	if not makermod.players[ply.id]['selected'] then return end
-	local vec = Vector3(args[1], args[2], args[3])
-	makermod.players[ply.id]['selected'].angles = vec
 end
 
 local function mConnectTo(ply, args)
