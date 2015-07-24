@@ -1,5 +1,4 @@
 local plugin = RegisterPlugin("MakerMod", "2.0")
-require 'Makermod/animation.lua'
 
 makermod = {}
 makermod.objects = {}
@@ -10,6 +9,8 @@ makermod.cvars = {}
 
 makermod.cvars['pain_maxdist'] = CreateCvar('makermod_pain_maxdistance', '200', CvarFlags.ARCHIVE)
 makermod.cvars['pain_maxdmg'] = CreateCvar('makermod_pain_maxdamage', '100000000', CvarFlags.ARCHIVE)
+
+require 'Makermod/animation.lua'
 
 local function BlankFunc() end -----fucking lua without 'continue' statement
 
@@ -44,12 +45,16 @@ end
 
 AddListener('JPLUA_EVENT_RUNFRAME', MainLoop)
 
-local function RemoveEntity(ent)
+local function StopEntity(ent)
 	for k, v in pairs(makermod.objects.moving) do
 		if v.ent == ent then
 			makermod.objects.moving[k] = nil
 		end
 	end
+end
+
+local function RemoveEntity(ent)
+	StopEntity(ent)
 
 	for k, v in pairs(makermod.objects.attached) do
 		if v.ent == ent then
@@ -176,6 +181,7 @@ local function OnUserSpawn(ply, firsttime)
 	makermod.players[ply.id]['selected'] = nil
 	makermod.players[ply.id]['grabbed'] = {}
 	makermod.players[ply.id]['arm'] = 200
+	makermod.players[ply.id]['movetime'] = 10000
 	makermod.players[ply.id]['autograbbing'] = true
 	makermod.players[ply.id]['objects'] = {}
 	makermod.players[ply.id]['password'] = ''
@@ -306,6 +312,113 @@ local function mKill(ply, args)
 	end
 end
 
+local function mMoveTime(ply, args)
+	if #args < 1 then
+		SendReliableCommand(ply.id, string.format('print "Mmove time: %d\n"', makermod.players[ply.id]['movetime']))
+		return
+	end
+	local time = args[1]
+	makermod.players[ply.id]['movetime'] = tonumber(time)
+end
+
+local function mMove(ply, args)
+	-- wrong syntax
+	if #args < 1 then
+		SendReliableCommand(ply.id, 'print "Command usage:   ^5/mmove <speed>\n^7Command usage:   ^5/mmove <x> <y> <z>\n^7Command usage:   ^5/mmove <x> <y> <z> <duration> <easing>\n^7Type /mmove list for easing list.\n"')
+		return
+	end
+
+	-- easing functions list
+	if args[1] == 'list' then
+		SendReliableCommand(ply.id, string.format('print "%s.\n"', easinglist))
+		return
+	end
+
+
+	local ent = makermod.players[ply.id]['selected']
+	if not ent then return end
+	StopEntity(ent)
+
+	-- parsing the args:
+
+	-- mmove speed
+	-- mmove speed dur
+	-- mmove speed dur easing
+	-- mmove speed easing
+	-- mmove x y z
+	-- mmove x y z dur
+	-- mmove x y z dur easing
+	-- mmove x y z easing
+	local dest = Vector3(0, 0, 0)
+	local dur = makermod.players[ply.id]['movetime']
+	local ease = 'linear'
+
+	if #args == 1 or #args == 2 or (#args == 3 and makermod.easing[args[3]]) then
+		-- move in eye direction
+		local ma = JPMath.AngleVectors(ply.angles, true, false, false)
+		dest = ply.position:MA(tonumber(args[1]), ma)
+		dest = dest - ply.position
+
+		if #args > 1 then
+			if #args == 2 then
+				if makermod.easing[args[2]] then
+					-- mmove <speed> <easing>
+					ease = args[2]
+				else
+					-- mmove <speed> <duration>
+					dur = args[2]
+				end
+			else
+				-- mmove <speed> <duration>
+				dur = args[2]
+				ease = args[3]
+			end
+		end
+	else
+		-- move by (x y z)
+		dest.x = tonumber(args[1]) * 10
+		dest.y = tonumber(args[2]) * 10
+		dest.z = tonumber(args[3]) * 10
+
+		if #args > 3 then
+			if #args == 4 then
+				if makermod.easing[args[4]] then
+					-- mmove <x> <y> <z> <easing>
+					ease = args[4]
+				else
+					-- mmove <x> <y> <z> <duration>
+					dur = args[4]
+				end
+			else
+				-- mmove <x> <y> <z> <duration> <easing>
+				dur = args[4]
+				ease = args[5]
+			end
+		end
+	end
+
+	if dest == Vector3(0, 0, 0) then return end
+
+	dur = tonumber(dur)
+
+	-- moving
+	if dur == 0 then
+		ent.position = ent.position + dest
+	else
+		-- animation
+		local data = {}
+		data.movingType = 'move'
+		data.ent = ent
+		data.start = GetRealTime()
+		data.coords = dest
+		data.pos = ent.position
+		data.ease = ease
+		data.dur = dur
+		makermod.objects.moving[#makermod.objects.moving + 1] = data
+	end
+end
+
+--[[
 local function mMove(ply, args)
 	if #args < 1 then
 		SendReliableCommand(ply.id, string.format('print "Command usage:   ^5/mmove <speed>\n^7Command usage:   ^5/mmove <x> <y> <z>\n^7Command usage:   ^5/mmove <x> <y> <z> <duration> <easing>\n^7Type /mmove list for easing list.\n"'))
@@ -341,24 +454,24 @@ local function mMove(ply, args)
 					end
 				end
 				-----try to parse duration and easing
-				s,e = string.match(args[i], "duration")
-				if res then 
-					local str = args[i]
-					str = string.sub(str, e+2)
-					res = string.match(str, "(%d+)")
-					if res then
-						duration = res
-					end
-				end
-				s,e = string.match(args[i], "easing")
-				if res then 
-					local str = args[i]
-					str = string.sub(str, e+2)
-					res = string.match(str, "(%a+)")
-					if res and makermod.easing[res] then
-						easing = res
-					end
-				end
+--				s,e = string.match(args[i], "duration")
+--				if res then 
+--					local str = args[i]
+--					str = string.sub(str, e+2)
+--					res = string.match(str, "(%d+)")
+--					if res then
+--						duration = res
+--					end
+--				end
+--				s,e = string.match(args[i], "easing")
+--				if res then 
+--					local str = args[i]
+--					str = string.sub(str, e+2)
+--					res = string.match(str, "(%a+)")
+--					if res and makermod.easing[res] then
+--						easing = res
+--					end
+--				end
 		end
 	end
 
@@ -384,7 +497,7 @@ local function mMove(ply, args)
 		end
 		makermod.objects.moving[#makermod.objects.moving + 1] = temp
 	end
-end
+end ]]--
 
 local function mRotate(ply, args)
 	if not makermod.players[ply.id]['selected'] then return end
@@ -569,7 +682,8 @@ end
 
 local function mOrigin(ply)
 	local vec = ply.position
-	SendReliableCommand(ply.id, string.format('print "Origin: (%d %d %d)\n"', vec.x, vec.y, math.floor(vec.z)))
+	-- todo: make numbers round instead of floor
+	SendReliableCommand(ply.id, string.format('print "Origin: (%d %d %d)\n"', math.floor(vec.x), math.floor(vec.y), math.floor(vec.z)))
 end
 
 local function mAttachFx(ply, args)
@@ -780,6 +894,7 @@ end
 AddClientCommand('mplace', mSpawn)
 AddClientCommand('mplacefx', mSpawnFX)
 AddClientCommand('mkill', mKill)
+AddClientCommand('mmovetime', mMoveTime)
 AddClientCommand('mmove', mMove)
 AddClientCommand('mrotate', mRotate)
 AddClientCommand('mconnectto', mConnectTo)
