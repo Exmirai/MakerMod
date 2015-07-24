@@ -7,7 +7,7 @@ makermod.objects.attached = {} -- for mattachfx
 makermod.players = {}
 makermod.cvars = {}
 
-makermod.cvars['pain_maxdist'] = CreateCvar('makermod_pain_maxdistance', '200', CvarFlags.ARCHIVE)
+makermod.cvars['pain_maxdist'] = CreateCvar('makermod_pain_maxdistance', '199', CvarFlags.ARCHIVE)
 makermod.cvars['pain_maxdmg'] = CreateCvar('makermod_pain_maxdamage', '100000000', CvarFlags.ARCHIVE)
 
 require 'Makermod/animation.lua'
@@ -738,17 +738,32 @@ local function mBreakable(ply, args)
 end
 
 local function mPain(ply, args)
-	if not makermod.players[ply.id]['selected'] then return end
 	if #args < 1 then return end
-	local data = makermod.objects[makermod.players[ply.id]['selected'].id]
-	if data['isfx'] == false then return end
-	local dist = tonumber(args[1])
-	local dmg = tonumber(args[2])
-	if dist > makermod.cvars['pain_maxdist']:GetInteger()  or dist < 0 then dist = makermod.cvars['pain_maxdist']:GetInteger() end
-	if dmg > makermod.cvars['pain_maxdmg']:GetInteger() or dmg < 0 then dmg = makermod.cvars['pain_maxdmg']:GetInteger() end
-	makermod.players[ply.id]['selected']:SetVar('splashRadius', tostring(dist))
-	makermod.players[ply.id]['selected']:SetVar('splashDamage', tostring(dmg))
-	makermod.players[ply.id]['selected'].spawnflags = makermod.players[ply.id]['selected'].spawnflags | 4
+
+	local ent = makermod.players[ply.id]['selected']
+	if not ent then return end
+	if ent.classname ~= 'fx_runner' then return end
+
+	local maxDmg = makermod.cvars['pain_maxdmg']:GetInteger()
+	local maxDst = makermod.cvars['pain_maxdist']:GetInteger()
+
+	local damage = tonumber(args[1])
+	local radius = tonumber(args[2])
+
+	if damage > maxDmg then
+		damage = maxDmg
+	end
+
+	ent:SetVar('splashDamage', damage)
+
+	if radius then
+		if radius > maxDst then
+			radius = maxDst
+		end
+		ent:SetVar('splashRadius', radius)
+	end
+
+	ent.spawnflags = 4
 end
 
 
