@@ -38,8 +38,10 @@ local function MainLoop()
 
 	for k, v in pairs(makermod.objects.attached) do
 		local bone = v['ply']:GetBoneVector(v['bone'])
-		local vec = Vector3(bone.x + v['x'], bone.y + v['y'], bone.z + v['z'])
-		v['ent'].position = vec
+		if bone then
+			local vec = Vector3(bone.x + v['x'], bone.y + v['y'], bone.z + v['z'])
+			v['ent'].position = vec
+		end
 	end
 end
 
@@ -223,9 +225,11 @@ local function mSpawn(ply, args)
 	makermod.players[ply.id]['objects'][#makermod.players[ply.id]['objects']+1] = ent
 	makermod.players[ply.id]['selected'] = ent
 	if makermod.players[ply.id]['autograbbing'] then
+		SendReliableCommand(ply.id, string.format('print "Object grabbed:%d. Use /mgrabbing to turn off auto-grabbing.\n"', ent.id))
 		makermod.players[ply.id]['grabbed'][#makermod.players[ply.id]['grabbed'] + 1] = ent
 	else
 		ent.position = makermod.players[ply.id]['mark_position'];
+		SendReliableCommand(ply.id, string.format('print "Object placed:%d  Origin: (%d %d %d)\n"', ent.id, math.floor(ent.position.x), math.floor(ent.position.y), math.floor(ent.position.z)))
 	end
 end
 
@@ -263,9 +267,11 @@ local function mSpawnFX(ply, args)
 	makermod.players[ply.id]['objects'][#makermod.players[ply.id]['objects']+1] = ent
 	makermod.players[ply.id]['selected'] = ent
 	if makermod.players[ply.id]['autograbbing'] then
+		SendReliableCommand(ply.id, string.format('print "Effect grabbed:%d. Use /mgrabbing to turn off auto-grabbing.\n"', ent.id))
 		makermod.players[ply.id]['grabbed'][#makermod.players[ply.id]['grabbed'] + 1] = ent
 	else
 		ent.position = makermod.players[ply.id]['mark_position'];
+		SendReliableCommand(ply.id, string.format('print "Effect placed:%d  Origin: (%d %d %d)\n"', ent.id, math.floor(ent.position.x), math.floor(ent.position.y), math.floor(ent.position.z)))
 	end
 end
 
