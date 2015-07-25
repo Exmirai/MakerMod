@@ -135,7 +135,6 @@ local function SetupEntity(ent, ply)
 		
 		
 	local touchfunc = function(ent, from, trace)
-		print('a')
 						for _, r in pairs(temp['touchfuncs']) do ---Check Internal functions
 							pcall(r, ent, from, trace)
 						end
@@ -177,7 +176,6 @@ local function SetupEntity(ent, ply)
 	makermod.objects[ent.id] = temp
 end
 
-
 function TraceEntity(ply, dist)
 	if not ply then return end
 	if not dist then dist = 16384 end
@@ -193,8 +191,9 @@ end
 local function CheckEntity(ent, ply)
 		if not makermod.objects[ent.id] then
 			SetupEntity(ent, 'map_object')
-			SendReliableCommand(ply.id, string.format('print "You cannot select map object!\n"'))
-			return false
+			return true
+		--	SendReliableCommand(ply.id, string.format('print "You cannot select map object!\n"'))
+		--	return false
 		else
 			local data = makermod.objects[ent.id]
 			if data['owner'] ~= ply then
@@ -345,7 +344,7 @@ function makermod.mKill(ply, args)
 		end
 	elseif mode == 'all' then
 		makermod.players[ply.id]['selected'] = nil
-		makermod.players[ply.id]['grabbed'] = nil
+		makermod.players[ply.id]['grabbed'] = {}
 		for _, ent in pairs(makermod.players[ply.id]['objects']) do
 			if ent then
 				RemoveEntity(ent)
@@ -968,7 +967,24 @@ AddClientCommand('mtelesp', mTelesp)
 AddClientCommand('mellipse', mEllipse)
 AddClientCommand('mastroid', mAstroid)
 AddClientCommand('mspiral', mSpiral)
+
 makermod.toolgun.init()
+
+AddClientCommand('mlight', function(ply, args)
+	local vars = {}
+	local plypos = ply.position
+	local plyang = ply.angles
+
+	vars['classname'] = 'func_static'
+	vars['model'] = '*2'
+	vars['light'] = 10000
+	vars['color'] = '0 1 1'
+	vars['origin'] = string.format('%d %d %d', math.floor(plypos.x), math.floor(plypos.y), math.floor(plypos.z))
+
+	local ent = CreateEntity(vars)
+	ent.position = plypos
+end)
+
 
 --[[
 

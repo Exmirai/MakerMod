@@ -14,15 +14,17 @@ function toolgun.setupplayer(ply)
 	local temp = {}
 	temp['currentmode'] = 'place'
 	temp['currentmodeinc'] = 1
-	temp['place_model'] = ''
+	temp['place_model'] = 'factory/catw2_b'
 	temp['connect_selected'] = nil
 	toolgun.settings[ply.id] = temp
 end
 
 local function Fire(ent)
 	if not ent.player then return end
-	local res, err = pcall(toolgun.modes[toolgun.settings[ent.player.id]['currentmode']], ent)
-	if not res then print('^2JPLua: ^3Makermod: ^1Error: ^7 Failed to execute ' .. toolgun.settings[ent.player.id]['currentmode'] .. ' mode ( ' .. err .. ' )') end
+	local mode = toolgun.settings[ent.player.id].currentmode
+	local modefunc = toolgun.modes[mode]
+	local res, err = pcall(modefunc, ent)
+--	if not res then print('^2JPLua: ^3Makermod: ^1Error: ^7 Failed to execute ' .. toolgun.settings[ent.player.id]['currentmode'] .. ' mode ( ' .. err .. ' )') end
 end
 
 local function AltFire(ent) --mode selector
@@ -35,7 +37,8 @@ local function AltFire(ent) --mode selector
 end
 
 local function TPlace(ent)
-	makermod.mSpawn(ent.player, {''}, toolgun.settings[ent.player.id]['place_model'])
+	makermod.mSpawn(ent.player, {toolgun.settings[ent.player.id]['place_model']})
+--	makermod.mSpawn(ent.player, {''}, toolgun.settings[ent.player.id]['place_model'])
 end
 
 local function TPlace_SelectModel(ent)
