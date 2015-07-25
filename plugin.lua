@@ -39,8 +39,7 @@ local function MainLoop()
 	for k, v in pairs(makermod.objects.attached) do
 		local bone = v['ply']:GetBoneVector(v['bone'])
 		if bone then
-			local vec = Vector3(bone.x + v['x'], bone.y + v['y'], bone.z + v['z'])
-			v['ent'].position = vec
+			v['ent'].position = v['align'] + bone
 		end
 	end
 end
@@ -94,6 +93,33 @@ local function ParseVector(vec, args, startfrom)
 		return vec
 end
 
+local function ParseNumber(args, count, startfrom, result)
+	startfrom = startfrom or 0
+	result = result or {}
+	local i
+	for i=1+startfrom, count+startfrom do
+		if args[i] == nil then
+				return vec
+		else
+				res = string.match(args[i], "+(%d+)")
+				if res then
+					result[i] = vec[type] + res
+				else
+					res = string.match(args[i], "-(%d+)")
+					if res then
+						result[i] = vec[type] - res
+					else
+						res = string.match(args[i], "%d+")
+						if res then
+							result[i] = res
+						end
+					end
+				end
+		
+		end
+	end
+end
+
 local function SetupEntity(ent, ply)
 	local temp = {}
 		temp['owner'] = ply
@@ -124,6 +150,10 @@ local function SetupEntity(ent, ply)
 	                  end
 					  
 	local usefunc = function(ent, from, activator)
+				if (from.player ~= nil ) and (makermod.objects[ent.id]['password'] ~= '') then ---check for password
+					if makermod.players[from.player.id]['password'] ~= makermod.objects[ent.id]['password'] then return end
+				end
+				
 						for _, r in pairs(temp['usefuncs']) do ---Check Internal functions
 							pcall(r, ent, from, activator)
 						end
@@ -583,7 +613,7 @@ local function mArm(ply, args)
 		return
 	end
 	local arm = args[1]
-	makermod.players[ply.id]['arm'] = tonumber(arm)
+	makermod.players[ply.id]['arm'] = ParseNumber(args, 1, 0,{makermod.players[ply.id]['arm']})[1]
 end
 
 local function mGrabbing(ply, args)
@@ -637,18 +667,18 @@ local function mSetPassword(ply, args)
 			local ent = GetEntity(trace.entityNum)
 			if not ent then return end
 			if not CheckEntity(ent, ply) then return end
-			makermod.objects[ent.id]['password'] = pass
+			makermod.objects[ent.id]['password'] = tostring(pass)
 		end
 	else
 		if not makermod.players[ply.id]['selected'] then return end
 		local ent = makermod.players[ply.id]['selected']
-		makermod.objects[ent.id]['password'] = value
+		makermod.objects[ent.id]['password'] = tostring(value)
 	end
 end
 
 local function mPassword(ply, args)
 	if #args < 1 then return end
-	makermod.players[ply.id]['password'] = args[1]
+	makermod.players[ply.id]['password'] = tostring(args[1])
 end
 
 local function mDoor(ply, args)
@@ -693,15 +723,7 @@ local function mAttachFx(ply, args)
 	temp['bone'] = args[1]
 	temp['ply'] = ply.entity
 	temp['ent'] = makermod.players[ply.id]['selected']
-	if #args > 1 then
-		temp['x'] = tonumber(args[2])
-		temp['y'] = tonumber(args[3])
-		temp['z'] = tonumber(args[4])
-	else
-		temp['x'] = 0
-		temp['y'] = 0
-		temp['z'] = 0
-	end
+	temp['align'] = ParseVector(Vector3(0,0,0), args, 1)
 	makermod.objects.attached[#makermod.objects.attached + 1] = temp
 end
 
