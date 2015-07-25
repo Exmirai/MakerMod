@@ -10,7 +10,8 @@ makermod.cvars = {}
 makermod.cvars['pain_maxdist'] = CreateCvar('makermod_pain_maxdistance', '199', CvarFlags.ARCHIVE)
 makermod.cvars['pain_maxdmg'] = CreateCvar('makermod_pain_maxdamage', '100000000', CvarFlags.ARCHIVE)
 
-require 'Makermod/animation.lua'
+require(plugin['dirname'] .. '/animation.lua')
+require(plugin['dirname'] .. '/toolgun.lua')
 
 local function BlankFunc() end -----fucking lua without 'continue' statement
 
@@ -177,7 +178,7 @@ local function SetupEntity(ent, ply)
 end
 
 
-local function TraceEntity(ply, dist)
+function TraceEntity(ply, dist)
 	if not ply then return end
 	if not dist then dist = 16384 end
 	local pos = ply.position
@@ -219,6 +220,9 @@ local function OnUserSpawn(ply, firsttime)
 	makermod.players[ply.id]['objects'] = {}
 	makermod.players[ply.id]['password'] = ''
 	makermod.players[ply.id]['mark_position'] = nil
+	if makermod.toolgun then
+		makermod.toolgun.setupplayer(ply)
+	end
 end
 AddListener('JPLUA_EVENT_CLIENTSPAWN',OnUserSpawn)
 
@@ -231,13 +235,15 @@ local function onUserDisconnect(ply)
 end
 AddListener('JPLUA_EVENT_CLIENTDISCONNECT',onUserDisconnect)
 
-local function mSpawn(ply, args)
+function makermod.mSpawn(ply, args, model)
+if (model == nil) or (model == '') then
 	if #args < 1 then
 		SendReliableCommand(ply.id, string.format('print "Command usage:   ^5/mplace <foldername/modelname>\n^7Command usage:   ^5/mplace <special-ob-name> <optional-special-ob-parameters>\n"'))
 		return
 	end
 
-	local model = args[1]
+	model = args[1] -- override
+end
 	local vars = {}
 	local plypos = ply.position
 	local plyang = ply.angles
@@ -263,13 +269,13 @@ local function mSpawn(ply, args)
 	end
 end
 
-local function mSpawnFX(ply, args)
+function makermod.mSpawnFX(ply, args, fx)
 	if #args < 1 then
 		SendReliableCommand(ply.id, string.format('print "Command usage:   ^5/mplacefx <effectname> <delay-between-firings-in-milliseconds> <optional-random-delay-component-in-ms>\n^71 second is 1000 milliseconds\n"'))
 		return
 	end
 
-	local fx = args[1]
+	fx = fx or args[1]
 	local vars = {}
 	local plypos = ply.position
 	local plyang = ply.angles
@@ -305,7 +311,7 @@ local function mSpawnFX(ply, args)
 	end
 end
 
-local function mKill(ply, args)
+function makermod.mKill(ply, args)
 	local mode = args[1]
 	if not mode then
 		local ent = makermod.players[ply.id]['selected']
@@ -535,7 +541,7 @@ local function mRotate(ply, args)
 	end
 end
 
-local function mConnectTo(ply, args)
+function makermod.mConnectTo(ply, args)
 	if not makermod.players[ply.id]['selected'] then return end
 	
 	local trace = TraceEntity(ply, nil)
@@ -553,12 +559,12 @@ local function mConnectTo(ply, args)
 	
 end
 
-local function mTouchable(ply, args)
+function makermod.mTouchable(ply, args)
  if not makermod.players[ply.id]['selected'] then return end
  		makermod.players[ply.id]['selected'].touchable = true
 end
 
-local function mUsable(ply, args)
+function makermod.mUsable(ply, args)
 	if not makermod.players[ply.id]['selected'] then return end
 	makermod.players[ply.id]['selected'].usable = true
 end
@@ -595,7 +601,7 @@ local function mTelesw(ply, args)
 				 end
 end
 
-local function mDest(ply, args)
+function makermod.mDest(ply, args)
 	 if not makermod.players[ply.id]['selected'] then return end
 	 if #args >= 1 then
 		if args[1] == 'trace' then
@@ -627,7 +633,7 @@ local function mGrabbing(ply, args)
 end
 
 
-local function mSelect(ply, args)
+function makermod.mSelect(ply, args)
 	local trace = TraceEntity(ply, nil)
 	if trace.entityNum >= 0 then
 		local ent = GetEntity(trace.entityNum)
@@ -639,7 +645,7 @@ local function mSelect(ply, args)
 	end
 end
 
-local function mDrop(ply, args)
+function makermod.mDrop(ply, args)
 	if args[1] == 'all' then
 		makermod.players[ply.id]['grabbed'] = {}
 		return
@@ -651,7 +657,7 @@ local function mDrop(ply, args)
 	end
 end
 
-local function mGrab(ply, args)
+function makermod.mGrab(ply, args)
 	if not makermod.players[ply.id]['selected'] then return end
 	makermod.players[ply.id]['grabbed'][#makermod.players[ply.id]['grabbed'] + 1] = makermod.players[ply.id]['selected']
 end
@@ -696,7 +702,7 @@ local function mAnim(ply, args)
 	ply:SetAnim(args[1], 1, 1)
 end
 
-local function mMark(ply, args)
+function makermod.mMark(ply, args)
 	local vec = ply.position
 	local i, type, res
 	if #args > 1 then
@@ -749,7 +755,7 @@ local function mScaleMe(ply, args)
 	ent:Scale(tonumber(args[1]))
 end
 
-local function mBreakable(ply, args)
+function makermod.mBreakable(ply, args)
 	if not makermod.players[ply.id]['selected'] then return end
 	if #args < 1 then return end
 	makermod.players[ply.id]['selected'].breakable = true
@@ -928,32 +934,32 @@ local function mSpiral(ply, args)
 	makermod.objects.moving[#makermod.objects.moving + 1] = temp
 end
 
-AddClientCommand('mplace', mSpawn)
-AddClientCommand('mplacefx', mSpawnFX)
-AddClientCommand('mkill', mKill)
+AddClientCommand('mplace', makermod.mSpawn) -- toolgun
+AddClientCommand('mplacefx', makermod.mSpawnFX) -- toolgun 
+AddClientCommand('mkill', makermod.mKill) -- toolgun
 AddClientCommand('mmovetime', mMoveTime)
 AddClientCommand('mmove', mMove)
 AddClientCommand('mrotate', mRotate)
-AddClientCommand('mconnectto', mConnectTo)
-AddClientCommand('mtouchable', mTouchable)
-AddClientCommand('musable', mUsable)
+AddClientCommand('mconnectto', makermod.mConnectTo) -- toolgun
+AddClientCommand('mtouchable', makermod.mTouchable) -- toolgun
+AddClientCommand('musable', makermod.mUsable) -- toolgun
 AddClientCommand('mprintsw', mPrintsw)
-AddClientCommand('mdest', mDest)
+AddClientCommand('mdest', makermod.mDest) -- toolgun
 AddClientCommand('marm', mArm)
 AddClientCommand('mgrabbing', mGrabbing)
-AddClientCommand('mselect', mSelect)
-AddClientCommand('mdrop', mDrop)
-AddClientCommand('mgrab', mGrab)
+AddClientCommand('mselect', makermod.mSelect) -- toolgun
+AddClientCommand('mdrop', makermod.mDrop) -- toolgun
+AddClientCommand('mgrab', makermod.mGrab) -- toolgun
 AddClientCommand('msetpassword', mSetPassword)
 AddClientCommand('mpassword', mPassword)
 AddClientCommand('mname', mName)
-AddClientCommand('mmark', mMark)
+AddClientCommand('mmark', makermod.mMark) -- toolgun
 AddClientCommand('morigin', mOrigin)
 AddClientCommand('manim', mAnim)
 AddClientCommand('mattachfx', mAttachFx)
 AddClientCommand('mscale', mScale)
 AddClientCommand('mscaleme', mScaleMe)
-AddClientCommand('mbreakable', mBreakable)
+AddClientCommand('mbreakable', makermod.mBreakable) -- toolgun
 AddClientCommand('mpain', mPain)
 AddClientCommand('mlist', mList)
 AddClientCommand('mlistfx', mListFx)
@@ -962,6 +968,7 @@ AddClientCommand('mtelesp', mTelesp)
 AddClientCommand('mellipse', mEllipse)
 AddClientCommand('mastroid', mAstroid)
 AddClientCommand('mspiral', mSpiral)
+makermod.toolgun.init()
 
 --[[
 
