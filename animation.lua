@@ -158,8 +158,7 @@ easinglist = 'linear, swing, spring, pulse, wobble, ease, cubic, quart, quint, e
 
 -- WIP movings
 local steps = {}
-steps['ellipse'] = function(object)
-
+steps['ellipse_inf'] = function(object)
 	local now = GetRealTime()
 	local period = object.period
 	local delta = (now - object.start) % period
@@ -171,8 +170,27 @@ steps['ellipse'] = function(object)
 	object.ent.position = pos
 end
 
-steps['astroid'] = function(object)
+steps['ellipse'] = function(object)
+	local now = GetRealTime()
+	local delta = now - object.start
+	if delta >= object.dur then
+		return false
+	end
 
+	local t = delta / object.dur
+	if object.ease ~= 'linear' and easing[object.ease] then
+		t = easing[object.ease](t)
+	end
+	local angle = object.from + object.to * t
+	-- converting from degrees to radians
+	angle = (angle / 180) * 3.14159265358979323
+
+	local center = object.center
+	local pos = Vector3(center.x + object.rx * math.cos(angle), center.y + object.ry * math.sin(angle), center.z)
+	object.ent.position = pos
+end
+
+steps['astroid_inf'] = function(object)
 	local now = GetRealTime()
 	local period = object.period
 	local delta = (now - object.start) % period
@@ -180,22 +198,49 @@ steps['astroid'] = function(object)
 	local ang = t * 2 * 3.14159265358979
 	local center = object.center
 
-	local pos = Vector3(center.x + object.rx * ((math.cos(ang)) ^ 3), center.y + object.ry * ((math.sin(ang)) ^ 3), center.z)
+	local pos = Vector3(center.x + object.rx * (math.cos(ang) ^ 3), center.y + object.ry * (math.sin(ang) ^ 3), center.z)
+	object.ent.position = pos
+end
+
+steps['astroid'] = function(object)
+	local now = GetRealTime()
+	local delta = now - object.start
+	if delta >= object.dur then
+		return false
+	end
+
+	local t = delta / object.dur
+	if object.ease ~= 'linear' and easing[object.ease] then
+		t = easing[object.ease](t)
+	end
+	local angle = object.from + object.to * t
+	-- converting from degrees to radians
+	angle = (angle / 180) * 3.14159265358979323
+
+	local center = object.center
+	local pos = Vector3(center.x + object.rx * (math.cos(angle) ^ 3), center.y + object.ry * (math.sin(angle) ^ 3), center.z)
 	object.ent.position = pos
 end
 
 steps['spiral'] = function(object)
-
 	local now = GetRealTime()
-	local period = object.period
-	local delta = (now - object.start)
-	local t = delta / period
-	local phi = t * 2 * 3.14159265358979
-	local r = object.k * phi
-	local center = object.center
+	local delta = now - object.start
+	if delta >= object.dur then
+		return false
+	end
 
-	local pos = Vector3(center.x + r * math.cos(phi), center.y + r * math.sin(phi), center.z)
-	object.ent.position = pos
+	local t = delta / object.dur
+	if object.ease ~= 'linear' and easing[object.ease] then
+		t = easing[object.ease](t)
+	end
+	local angle = object.from + object.to * t
+	-- converting from degrees to radians
+	angle = (angle / 180) * 3.14159265358979323
+
+	local center = object.center
+	local r = angle * object.k
+
+	object.ent.position = Vector3(center.x + r * math.cos(angle), center.y + r * math.sin(angle), center.z)
 end
 
 steps['rotate'] = function(object)

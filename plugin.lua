@@ -190,10 +190,9 @@ end
 
 local function CheckEntity(ent, ply)
 		if not makermod.objects[ent.id] then
-			SetupEntity(ent, 'map_object')
-			return true
-		--	SendReliableCommand(ply.id, string.format('print "You cannot select map object!\n"'))
-		--	return false
+		--	SetupEntity(ent, 'map_object')
+			SendReliableCommand(ply.id, string.format('print "You cannot select map object!\n"'))
+			return false
 		else
 			local data = makermod.objects[ent.id]
 			if data['owner'] ~= ply then
@@ -219,6 +218,7 @@ local function OnUserSpawn(ply, firsttime)
 	makermod.players[ply.id]['objects'] = {}
 	makermod.players[ply.id]['password'] = ''
 	makermod.players[ply.id]['mark_position'] = nil
+	makermod.players[ply.id]['marks'] = {}
 	if makermod.toolgun then
 		makermod.toolgun.setupplayer(ply)
 	end
@@ -262,7 +262,7 @@ end
 	if makermod.players[ply.id]['autograbbing'] then
 		SendReliableCommand(ply.id, string.format('print "Object grabbed:%d. Use /mgrabbing to turn off auto-grabbing.\n"', ent.id))
 		makermod.players[ply.id]['grabbed'][#makermod.players[ply.id]['grabbed'] + 1] = ent
-	else
+	elseif makermod.players[ply.id]['mark_position'] then
 		ent.position = makermod.players[ply.id]['mark_position'];
 		SendReliableCommand(ply.id, string.format('print "Object placed:%d  Origin: (%d %d %d)\n"', ent.id, math.floor(ent.position.x), math.floor(ent.position.y), math.floor(ent.position.z)))
 	end
@@ -297,14 +297,14 @@ function makermod.mSpawnFX(ply, args, fx)
 	local ent = CreateEntity(vars)
 	ent.position = entpos
 	SetupEntity(ent, ply)
-	makermod.objects[ent.id]['isfx'] = true
+	makermod.objects[ent.id]['fxFile'] = fx
 	
 	makermod.players[ply.id]['objects'][#makermod.players[ply.id]['objects']+1] = ent
 	makermod.players[ply.id]['selected'] = ent
 	if makermod.players[ply.id]['autograbbing'] then
 		SendReliableCommand(ply.id, string.format('print "Effect grabbed:%d. Use /mgrabbing to turn off auto-grabbing.\n"', ent.id))
 		makermod.players[ply.id]['grabbed'][#makermod.players[ply.id]['grabbed'] + 1] = ent
-	else
+	elseif makermod.players[ply.id]['mark_position'] then
 		ent.position = makermod.players[ply.id]['mark_position'];
 		SendReliableCommand(ply.id, string.format('print "Effect placed:%d  Origin: (%d %d %d)\n"', ent.id, math.floor(ent.position.x), math.floor(ent.position.y), math.floor(ent.position.z)))
 	end
@@ -313,8 +313,15 @@ end
 function makermod.mKill(ply, args)
 	local mode = args[1]
 	if not mode then
+		-- mkill (selected object)
 		local ent = makermod.players[ply.id]['selected']
 		if not ent then return end
+
+		for k, v in pairs(makermod.players[ply.id]['objects']) do
+			if ent and v == ent then
+				makermod.players[ply.id]['objects'][k] = nil
+			end
+		end
 
 		for k, v in pairs(makermod.players[ply.id]['grabbed']) do
 			if v == ent then
@@ -324,7 +331,18 @@ function makermod.mKill(ply, args)
 
 		makermod.players[ply.id]['selected'] = nil
  		RemoveEntity(ent)
+ 	elseif mode == 'in' then
+ 		-- mkill in <time>
+ 		local time = tonumber(args[2])
+ 		local ent = makermod.players[ply.id]['selected']
+		if not ent then return end
+		local data = {}
+		data['ply'] = ply
+		data['ent'] = ent
+		data['time'] = GetRealTime() + time
+	--	makermod.objects.tokill[#makermod.objects.tokill + 1] = data
 	elseif mode == 'trace' then
+		-- mkill trace
 		local trace = TraceEntity(ply, nil)
 		if trace.entityNum > 0 then
 			local ent = GetEntity(trace.entityNum)
@@ -343,14 +361,15 @@ function makermod.mKill(ply, args)
 			end
 		end
 	elseif mode == 'all' then
+		-- mkill all
 		makermod.players[ply.id]['selected'] = nil
 		makermod.players[ply.id]['grabbed'] = {}
 		for _, ent in pairs(makermod.players[ply.id]['objects']) do
 			if ent then
 				RemoveEntity(ent)
-				makermod.players[ply.id]['objects'][ent] = nil
 			end
 		end
+		makermod.players[ply.id]['objects'] = {}
 	end
 end
 
@@ -425,9 +444,11 @@ local function mMove(ply, args)
 		end
 	else
 		-- move by (x y z)
-		dest.x = tonumber(args[1]) * 10
-		dest.y = tonumber(args[2]) * 10
-		dest.z = tonumber(args[3]) * 10
+		dest = ParseVector(Vector3(0, 0, 0), args, 0) * 10
+
+	--	dest.x = tonumber(args[1]) * 10
+	--	dest.y = tonumber(args[2]) * 10
+	--	dest.z = tonumber(args[3]) * 10
 
 		if #args > 3 then
 			if #args == 4 then
@@ -618,11 +639,22 @@ local function mArm(ply, args)
 		return
 	end
 	local arm = args[1]
-	makermod.players[ply.id]['arm'] = ParseNumber(args, 1, 0,{makermod.players[ply.id]['arm']})[1]
+	makermod.players[ply.id]['arm'] = tonumber(arm) --ParseNumber(args, 1, 0,{makermod.players[ply.id]['arm']})[1]
 end
 
 local function mGrabbing(ply, args)
-	if makermod.players[ply.id]['autograbbing'] then
+	local state
+	if args[1] then
+		if args[1] == 'off' then
+			state = true
+		else
+			state = false
+		end
+	else
+		state = makermod.players[ply.id]['autograbbing']
+	end
+
+	if state then
 		makermod.players[ply.id]['autograbbing'] = false
 		SendReliableCommand(ply.id, string.format('print "Automatic Grabbing OFF.\n"'))
 	else
@@ -715,6 +747,33 @@ function makermod.mMark(ply, args)
 	SendReliableCommand(ply.id, string.format('print "Marked: (%d %d %d)\n"', math.floor(vec.x), math.floor(vec.y), math.floor(vec.z)))
 end
 
+function mMarkSave(ply, args)
+	if #args < 1 then
+		SendReliableCommand(ply.id, 'print "Command usage:   ^5/mmarksave <name>\n"')
+		return
+	end
+
+	local mark = makermod.players[ply.id]['mark_position']
+	makermod.players[ply.id]['marks'][args[1]] = mark
+	SendReliableCommand(ply.id, string.format('print "Mark (%s) saved: (%d %d %d)\n"', args[1], math.floor(mark.x), math.floor(mark.y), math.floor(mark.z)))
+end
+
+function mMarkSelect(ply, args)
+	if #args < 1 then
+		SendReliableCommand(ply.id, 'print "Command usage:   ^5/mmarkselect <name>\n"')
+		return
+	end
+
+	local mark = makermod.players[ply.id]['marks'][args[1]]
+	if not mark then
+		SendReliableCommand(ply.id, string.format('print "Mark \"%s\" not found.\n"', args[1]))
+		return
+	end
+
+	makermod.players[ply.id]['mark_position'] = mark
+	SendReliableCommand(ply.id, string.format('print "Mark (%s) selected: (%d %d %d)\n"', args[1], math.floor(mark.x), math.floor(mark.y), math.floor(mark.z)))
+end
+
 local function mOrigin(ply)
 	local vec = ply.position
 	-- todo: make numbers round instead of floor
@@ -796,9 +855,13 @@ end
 
 
 local function mList(ply, args)
-	local string = ''
+	local list
+	if #args < 1 then
+		list = GetFileList('models/map_objects/', 'md3')
+	else
+		list = GetFileList('models/map_objects/' .. args[1], '.md3')
+	end
 
-	local list = GetFileList('models/map_objects/', 'md3')
 	local function isHas(object, value)
 		for _, v in pairs(object) do
 			if v == value then
@@ -809,25 +872,37 @@ local function mList(ply, args)
 	end
 
 	local models = {}
-	for _, v in pairs(list) do
+	for k, v in pairs(list) do
 		if not isHas(models, v) then
 			models[#models + 1] = v
-			SendReliableCommand(ply.id, "print '" .. string.gsub(v, '.md3', '') .. "\n'")
+			SendReliableCommand(ply.id, 'print "' .. string.gsub(v, '.md3', '') .. '\n"')
 		end
 	end
 end
 
 local function mListFx(ply, args)
-	local string = ''
-	if #args < 1 then 
-		local list = GetFileList('models/map_objects/', '/')
+	local list
+	if #args < 1 then
+		list = GetFileList('effects', 'efx')
 	else
-		local list = GetFileList('models/map_objects/' .. args[1], '.md3')
+		list = GetFileList('effects/' .. args[1], 'efx')
 	end
-	for _,v in pairs(list) do
-		v = string.sub(v, -4)
-		string.format('%s%s\n', string, v)
-		SendReliableCommand(ply.id, string.format("print '%s\n'"))
+
+	local function isHas(object, value)
+		for _, v in pairs(object) do
+			if v == value then
+				return true
+			end
+		end
+		return false
+	end
+
+	local models = {}
+	for k, v in pairs(list) do
+		if not isHas(models, v) then
+			models[#models + 1] = v
+			SendReliableCommand(ply.id, 'print "' .. string.gsub(v, '.efx', '') .. '\n"')
+		end
 	end
 end
 
@@ -839,98 +914,146 @@ local function mTelesp(ply, args)
 end
 
 local function mEllipse(ply, args)
+	-- mellipse <rx> <ry> <from> <to>
+	-- mellipse <rx> <ry> <from> <to> <dur>
+	-- mellipse <rx> <ry> <from> <to> <dur> <easing>
+	-- mellipse <rx> <ry> <period-in-ms>
+
 	if #args < 1 then
-		SendReliableCommand(ply.id, string.format('print "Command usage:   ^5/mellipse <radius>\n^7Command usage:   ^5/mellipse <rx> <ry>\n^7Command usage:   ^5/mellipse <rx> <ry> <period-in-milliseconds>\n"'))
+		SendReliableCommand(ply.id, string.format('print "Command usage:   ^5/mellipse <radius> <from> <to> <dur> <easing>\n^7Command usage:   ^5/mellipse <rx> <ry> <from> <to> <dur> <easing>\n^7Command usage:   ^5/mellipse <rx> <ry> <period-in-milliseconds>\n"'))
 		return
-	end
-	local rx = tonumber(args[1])
-	local ry = args[2]
-	local period = args[3]
-
-	if not ry then
-		ry = rx
-	else
-		ry = tonumber(ry)
-	end
-
-	if not period then
-		period = 1000
-	else
-		period = tonumber(period)
 	end
 
 	local ent = makermod.players[ply.id]['selected']
 	if not ent then return end
 
-	local temp = {}
-	temp.movingType = 'ellipse'
-	temp.ent = ent
-	temp.start = GetRealTime()
-	temp.rx = rx
-	temp.ry = ry
-	temp.center = ply.position
-	temp.period = period
-	makermod.objects.moving[#makermod.objects.moving + 1] = temp
+	local data = {}
+
+	data.rx = tonumber(args[1])
+	data.ry = tonumber(args[2])
+	data.ent = ent
+	data.start = GetRealTime()
+	data.center = ent.position
+
+	if #args == 3 or #args == 2 then
+		data.movingType = 'ellipse_inf'
+		data.period = tonumber(args[3]) or 1000
+	else
+		data.movingType = 'ellipse'
+		data.from = tonumber(args[3])
+		data.to = tonumber(args[4])
+		data.dur = tonumber(args[5]) or 1000--makermod.players[ply.id]['movetime']
+		data.ease = args[6] or 'linear'
+	end
+
+	makermod.objects.moving[#makermod.objects.moving + 1] = data
 end
 
 local function mAstroid(ply, args)
+
 	if #args < 1 then
+		SendReliableCommand(ply.id, string.format('print "Command usage:   ^5/mastroid <radius> <from> <to> <dur> <easing>\n^7Command usage:   ^5/mastroid <rx> <ry> <from> <to> <dur> <easing>\n^7Command usage:   ^5/mastroid <rx> <ry> <period-in-milliseconds>\n"'))
 		return
-	end
-	local rx = tonumber(args[1])
-	local ry = args[2]
-	local period = args[3]
-
-	if not ry then
-		ry = rx
-	else
-		ry = tonumber(ry)
-	end
-
-	if not period then
-		period = 1000
-	else
-		period = tonumber(period)
 	end
 
 	local ent = makermod.players[ply.id]['selected']
 	if not ent then return end
 
-	local temp = {}
-	temp.movingType = 'astroid'
-	temp.ent = ent
-	temp.start = GetRealTime()
-	temp.rx = rx
-	temp.ry = ry
-	temp.center = ply.position
-	temp.period = period
-	makermod.objects.moving[#makermod.objects.moving + 1] = temp
+	local data = {}
+
+	data.rx = tonumber(args[1])
+	data.ry = tonumber(args[2])
+	data.ent = ent
+	data.start = GetRealTime()
+	data.center = ent.position
+
+	if #args == 3 then
+		data.movingType = 'astroid_inf'
+		data.period = tonumber(args[3]) or 1000
+	else
+		data.movingType = 'astroid'
+		data.from = tonumber(args[3])
+		data.to = tonumber(args[4])
+		data.dur = tonumber(args[5]) or makermod.players[ply.id]['movetime']
+		data.ease = args[6] or 'linear'
+	end
+
+	makermod.objects.moving[#makermod.objects.moving + 1] = data
 end
 
 local function mSpiral(ply, args)
-	if #args < 1 then
-		return
-	end
-	local k = tonumber(args[1])
-	local period = args[2]
+	-- mspiral k from to dur easing
 
-	if not period then
-		period = 1000
-	else
-		period = tonumber(period)
+	if #args < 1 then
+		SendReliableCommand(ply.id, string.format('print "Command usage:   ^5/mspiral <k> <from> <to> <dur> <easing>\n"'))
+		return
 	end
 
 	local ent = makermod.players[ply.id]['selected']
 	if not ent then return end
 
-	local temp = {}
-	temp.movingType = 'spiral'
-	temp.ent = ent
-	temp.start = GetRealTime()
-	temp.k = k
-	temp.center = ply.position
-	temp.period = period
-	makermod.objects.moving[#makermod.objects.moving + 1] = temp
+	local data = {}
+	data.movingType = 'spiral'
+	data.k = tonumber(args[1])
+	data.from = tonumber(args[2])
+	data.to = tonumber(args[3])
+	data.ent = ent
+	data.start = GetRealTime()
+	data.center = ent.position
+	data.dur = makermod.players[ply.id]['movetime']
+	data.ease = 'linear'
+
+	if #args == 4 then
+		if makermod.easing[args[4]] then
+			data.ease = args[4]
+		else
+			data.dur = tonumber(args[4])
+		end
+	elseif #args == 5 then
+		data.dur = tonumber(args[4])
+		data.ease = args[5]
+	end
+
+	makermod.objects.moving[#makermod.objects.moving + 1] = data
+end
+
+local function mListObs(ply, args)
+	local page = tonumber(args[1]) or 1--(tonumber(args[1]) - 1) or 0
+	local obsOnPage = 10
+	local obs = makermod.players[ply.id]['objects']
+	local numPages = math.floor(#obs / obsOnPage + 0.9)
+	if #obs == 0 then
+		SendReliableCommand(ply.id, 'print "You have 0 objects.\n"')
+		return
+	end
+	if page < 0 then
+		SendReliableCommand(ply.id, 'print "Wrong page!\n"')
+		return
+	end
+	if page > numPages then
+		if numPages == 1 then
+			SendReliableCommand(ply.id, 'print "There is 1 page.\n"')
+		else
+			SendReliableCommand(ply.id, string.format('print "There are %s pages.\n"', numPages))
+		end
+		return
+	end
+
+	local endOb = page * obsOnPage
+	local str = string.format("Your objects (page %d of %d)\n", page, numPages)
+	for i=(endOb-9),endOb do
+		if obs[i] then
+			if obs[i].classname == 'fx_runner' then
+				str = str .. string.format("%d   %s    (%d %d %d)\n", obs[i].id, makermod.objects[obs[i].id]['fxFile'], math.floor(obs[i].position.x), math.floor(obs[i].position.y), math.floor(obs[i].position.z))
+			else
+				local model = obs[i].model
+				model = string.gsub(model, 'models/map_objects/', '')
+				model = string.gsub(model, '.md3', '')
+				str = str .. string.format("%d   %s    (%d %d %d)\n", obs[i].id, model, math.floor(obs[i].position.x), math.floor(obs[i].position.y), math.floor(obs[i].position.z))
+			end
+		end
+	end
+	SendReliableCommand(ply.id, string.format('print "%s"', str))
 end
 
 AddClientCommand('mplace', makermod.mSpawn) -- toolgun
@@ -953,6 +1076,8 @@ AddClientCommand('msetpassword', mSetPassword)
 AddClientCommand('mpassword', mPassword)
 AddClientCommand('mname', mName)
 AddClientCommand('mmark', makermod.mMark) -- toolgun
+AddClientCommand('mmarksave', mMarkSave)
+AddClientCommand('mmarkselect', mMarkSelect)
 AddClientCommand('morigin', mOrigin)
 AddClientCommand('manim', mAnim)
 AddClientCommand('mattachfx', mAttachFx)
@@ -963,6 +1088,7 @@ AddClientCommand('mpain', mPain)
 AddClientCommand('mlist', mList)
 AddClientCommand('mlistfx', mListFx)
 AddClientCommand('mtelesp', mTelesp)
+AddClientCommand('mlistobs', mListObs)
 
 AddClientCommand('mellipse', mEllipse)
 AddClientCommand('mastroid', mAstroid)
@@ -971,18 +1097,25 @@ AddClientCommand('mspiral', mSpiral)
 makermod.toolgun.init()
 
 AddClientCommand('mlight', function(ply, args)
+	if #args < 1 then
+		SendReliableCommand(ply.id, string.format('print "Command usage:   ^5/mlight <intensity> <r> <g> <b>\n"'))
+		return
+	end
+
+	local ent = makermod.players[ply.id]['selected']
+	if not ent then return end
+
 	local vars = {}
-	local plypos = ply.position
-	local plyang = ply.angles
 
 	vars['classname'] = 'func_static'
 	vars['model'] = '*2'
-	vars['light'] = 10000
-	vars['color'] = '0 1 1'
-	vars['origin'] = string.format('%d %d %d', math.floor(plypos.x), math.floor(plypos.y), math.floor(plypos.z))
+	vars['light'] = tonumber(args[1])
+	if #args > 1 then
+		vars['color'] = string.format('%s %s %s', args[2], args[3], args[4])
+	end
 
 	local ent = CreateEntity(vars)
-	ent.position = plypos
+	ent.position = ent.position
 end)
 
 

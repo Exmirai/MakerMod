@@ -38,7 +38,6 @@ end
 
 local function TPlace(ent)
 	makermod.mSpawn(ent.player, {toolgun.settings[ent.player.id]['place_model']})
---	makermod.mSpawn(ent.player, {''}, toolgun.settings[ent.player.id]['place_model'])
 end
 
 local function TPlace_SelectModel(ent)
@@ -47,6 +46,16 @@ end
 
 local function TRemove(ent)
 	makermod.mKill(ent.player, {'trace'})
+end
+
+local function TTrace(ent)
+	-- doesnt works :(
+	local trace = TraceEntity(ent.player, nil)
+	if trace.entityNum > 0 then
+		local ent = GetEntity(trace.entityNum)
+		if not ent then return end
+		SendReliableCommand(ent.player.id, string.format('print "Entity %s: %d\nOrigin: (%d %d %d)\n"', ent.classname, ent.id, math.floor(ent.position.x), math.floor(ent.position.y), math.floor(ent.position.z)))
+	end
 end
 
 local function TConnect(ent)
@@ -89,6 +98,8 @@ function toolgun.init()
 		toolgun.modes[3] = 'connect'
 	toolgun.modes['place_modelselect'] = TPlace_SelectModel
 		toolgun.modes[4] = 'place_modelselect'
+	toolgun.modes['trace'] = TTrace
+		toolgun.modes[5] = 'trace'
 
 	SetWeaponFireFunc(Weapons.STUN_BATON, Fire)
 	SetWeaponAltFireFunc(Weapons.STUN_BATON, AltFire)
