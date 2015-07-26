@@ -353,7 +353,7 @@ function makermod.mKill(ply, args)
 							makermod.players[ply.id]['selected'] = nil
 						end
 						if makermod.players[ply.id]['grabbed'] == ent then
-							makermod.players[ply.id]['grabbed'] = nil
+							makermod.players[ply.id]['grabbed'] = {}
 						end
 					end
 				RemoveEntity(ent)
