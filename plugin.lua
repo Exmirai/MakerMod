@@ -166,18 +166,22 @@ function makermod.Run(code, ply)
 				currentArgumentId = currentArgumentId + 1
 			end
 		elseif char == ';' then
-			-- the next command
-			currentArguments[currentArgumentId] = currentArgument
-			currentArgument = ""
-			currentArgumentId = 1
+			if inQuotes then
+				currentArgument = currentArgument .. ";"
+			else
+				-- the next command
+				currentArguments[currentArgumentId] = currentArgument
+				currentArgument = ""
+				currentArgumentId = 1
 
-		--	commands[currentCommandId] = { name = currentCommand, args = currentArguments }
-			makermod.Exec(currentCommand, ply, currentArguments)
+			--	commands[currentCommandId] = { name = currentCommand, args = currentArguments }
+				makermod.Exec(currentCommand, ply, currentArguments)
 
-			currentCommand = ""
-			currentCommandId = currentCommandId + 1
-			currentArguments = {}
-			state = 1
+				currentCommand = ""
+				currentCommandId = currentCommandId + 1
+				currentArguments = {}
+				state = 1
+			end
 		elseif char == "\"" then
 			if inQuotes == true then
 				inQuotes = false
