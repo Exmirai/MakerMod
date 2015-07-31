@@ -7,8 +7,13 @@ makermod.objects.attached = {} -- for mattachfx
 makermod.players = {}
 makermod.cvars = {}
 
+makermod.commands = {}
+makermod.timers = {} -- instead of objects.moving and objects.attached
+makermod.timerListeners = {}
+
 makermod.cvars['pain_maxdist'] = CreateCvar('makermod_pain_maxdistance', '199', CvarFlags.ARCHIVE)
 makermod.cvars['pain_maxdmg'] = CreateCvar('makermod_pain_maxdamage', '100000000', CvarFlags.ARCHIVE)
+makermod.cvars['max_arm'] = CreateCvar('makermod_arm_max', '1000', CvarFlags.ARCHIVE)
 
 require(plugin['dirname'] .. '/animation.lua')
 require(plugin['dirname'] .. '/toolgun.lua')
@@ -31,6 +36,14 @@ local function MainLoop()
 		end
 	end
 
+	for k, v in pairs(makermod.timers) do
+		if makermod.timerListeners[v.type] then
+			if makermod.timerListeners[v.type](v) == false then
+				makermod.timers[k] = nil
+			end
+		end
+	end
+--[[
 	for k, v in pairs(makermod.objects.moving) do
 		if AnimStep(v) == false then
 			makermod.objects.moving[k] = nil
@@ -42,10 +55,171 @@ local function MainLoop()
 		if bone then
 			v['ent'].position = v['align'] + bone
 		end
-	end
+	end ]]--
 end
 
 AddListener('JPLUA_EVENT_RUNFRAME', MainLoop)
+
+
+-- Registers user
+function makermod.RegUser(ply)
+	if makermod.players[ply.id] then return end
+
+	local plyob = {}
+
+	-- properties
+	plyob.selected = nil
+	plyob.grabbed = {}
+	plyob.arm = 200
+	plyob.movetime = 10000
+	plyob.autograbbing = true
+	plyob.objects = {}
+	plyob.password = ''
+	plyob.mark_position = nil
+	plyob.marks = {}
+
+	-- commands
+	plyob.print = function(str)
+		SendReliableCommand(ply.id, string.format('print "%s\n"', str))
+	end
+
+	makermod.players[ply.id] = plyob
+
+	if makermod.toolgun then
+		makermod.toolgun.setupplayer(ply)
+	end
+end
+
+AddListener('JPLUA_EVENT_CLIENTSPAWN', makermod.RegUser)
+
+
+-- Adds new command
+function makermod.AddCommand(name, func, selectedObj)
+	if not func then
+		print('Can\'t find function for command ' .. name .. '.')
+		return
+	end
+
+	makermod.commands[name] = function(ply, args)
+		-- lua_reload after player connect
+		if not makermod.players[ply.id] then
+			makermod.RegUser(ply)
+		end
+
+		if selectedObj then
+			local ent = makermod.players[ply.id]['selected']
+			if not ent then
+				SendReliableCommand(ply.id, 'print "You have no selected objects.\n"')
+				return
+			end
+			return func(ply, args, makermod.players[ply.id], ent)
+		end
+
+		return func(ply, args, makermod.players[ply.id])
+	end
+
+	AddClientCommand(name, makermod.commands[name])
+end
+
+-- Executes command from the player name
+function makermod.Exec(command, ply, params)
+	return makermod.commands[command](ply, params)
+end
+
+-- Runs multiple commands from the player name
+function makermod.Run(code, ply)
+	-- preprocessing
+	local len = string.len(code)
+
+	-- add ; at the end of commands
+	if code.sub(code, len, len) ~= ';' then
+		code = code .. ';'
+		len = len + 1
+	end
+
+	-- remove spaces after ;
+	code = string.gsub(code, '; ', ';')
+
+	-- commands parsing
+	local char
+	local state = 1 -- 1: read command; 2: read arguments
+	local currentCommand = ""
+	local currentCommandId = 1
+	local currentArguments = {}
+	local currentArgument = ""
+	local currentArgumentId = 1
+	local inQuotes = false
+
+	for i=1, len do
+		char = string.sub(code, i, i)
+
+		if char == ' ' then
+			if state == 1 then
+				state = 2
+			elseif inQuotes then
+				-- read arguments
+				currentArgument = currentArgument .. " "
+			else
+				-- the next argument
+				currentArguments[currentArgumentId] = currentArgument
+				currentArgument = ""
+				currentArgumentId = currentArgumentId + 1
+			end
+		elseif char == ';' then
+			-- the next command
+			currentArguments[currentArgumentId] = currentArgument
+			currentArgument = ""
+			currentArgumentId = 1
+
+		--	commands[currentCommandId] = { name = currentCommand, args = currentArguments }
+			makermod.Exec(currentCommand, ply, currentArguments)
+
+			currentCommand = ""
+			currentCommandId = currentCommandId + 1
+			currentArguments = {}
+			state = 1
+		elseif char == "\"" then
+			if inQuotes == true then
+				inQuotes = false
+			else
+				inQuotes = true
+			end
+		else
+			if state == 1 then
+				-- read command name
+				currentCommand = currentCommand .. string.lower(char)
+			elseif state == 2 then
+				-- read arguments
+				currentArgument = currentArgument .. char
+			end
+		end
+	end
+end
+
+-- Adds a loop callback
+function makermod.AddTimer(object)
+	makermod.timers[#makermod.timers + 1] = object
+end
+
+-- Removes timers
+function makermod.StopAllTimers(ent)
+	for k, v in pairs(makermod.timers) do
+		if v.ent == ent then
+			makermod.timers[k] = nil
+		end
+	end
+end
+
+function makermod.StopTimersExceptRotate(ent)
+	for k, v in pairs(makermod.timers) do
+		if v.type ~= 'rotate' and v.ent == ent then
+			makermod.timers[k] = nil
+		end
+	end
+end
+
+
+
 
 local function StopEntity(ent)
 	for k, v in pairs(makermod.objects.moving) do
@@ -207,24 +381,6 @@ local function CheckEntity(ent, ply)
 		return true
 end
 
-local function OnUserSpawn(ply, firsttime)
-	if makermod.players[ply.id] then return end
-	makermod.players[ply.id] = {}
-	makermod.players[ply.id]['selected'] = nil
-	makermod.players[ply.id]['grabbed'] = {}
-	makermod.players[ply.id]['arm'] = 200
-	makermod.players[ply.id]['movetime'] = 10000
-	makermod.players[ply.id]['autograbbing'] = true
-	makermod.players[ply.id]['objects'] = {}
-	makermod.players[ply.id]['password'] = ''
-	makermod.players[ply.id]['mark_position'] = nil
-	makermod.players[ply.id]['marks'] = {}
-	if makermod.toolgun then
-		makermod.toolgun.setupplayer(ply)
-	end
-end
-AddListener('JPLUA_EVENT_CLIENTSPAWN',OnUserSpawn)
-
 local function onUserDisconnect(ply)
 	for _, ent in pairs(makermod.players[ply.id]['objects']) do
 		makermod.objects[ent.id] = nil
@@ -234,87 +390,114 @@ local function onUserDisconnect(ply)
 end
 AddListener('JPLUA_EVENT_CLIENTDISCONNECT',onUserDisconnect)
 
-function makermod.mSpawn(ply, args, model)
-if (model == nil) or (model == '') then
-	if #args < 1 then
-		SendReliableCommand(ply.id, string.format('print "Command usage:   ^5/mplace <foldername/modelname>\n^7Command usage:   ^5/mplace <special-ob-name> <optional-special-ob-parameters>\n"'))
+
+
+
+--[[
+		## Makermod Commands ##
+  ]]--
+
+
+
+-- mplace <foldername/modelname>
+-- mplace <modelpath>
+-- mplace <special-ob-name> <optional-special-ob-parameters>
+local function mPlace(ply, args, plyob)
+	local model = args[1]
+
+	-- wrong syntax
+	if not model then
+		plyob.print('Command usage:   ^5/mplace <foldername/modelname>\n^7Command usage:   ^5/mplace <special-ob-name> <optional-special-ob-parameters>')
 		return
 	end
 
-	model = args[1] -- override
-end
+	-- factory/catw2_b instead of models/map_objects/factory/catw2_b.md3
+	if not string.match(model, 'models/map_objects') then
+		model = 'models/map_objects/' .. model .. '.md3'
+	end
+
+	-- making an entity
 	local vars = {}
-	local plypos = ply.position
-	local plyang = ply.angles
-	
-	local entpos = JPMath.AngleVectors(plyang, true,false,false)
-	entpos = plypos:MA(makermod.players[ply.id]['arm'], entpos)
-	
-		vars['classname'] = 'misc_model'
-		vars['model'] = 'models/map_objects/' .. model .. '.md3'
+	vars['classname'] = 'misc_model'
+	vars['model'] = model
+
 	local ent = CreateEntity(vars)
-	ent.position = entpos
-	
-	SetupEntity(ent, ply)
-	
-	makermod.players[ply.id]['objects'][#makermod.players[ply.id]['objects']+1] = ent
-	makermod.players[ply.id]['selected'] = ent
-	if makermod.players[ply.id]['autograbbing'] then
-		SendReliableCommand(ply.id, string.format('print "Object grabbed:%d. Use /mgrabbing to turn off auto-grabbing.\n"', ent.id))
-		makermod.players[ply.id]['grabbed'][#makermod.players[ply.id]['grabbed'] + 1] = ent
-	elseif makermod.players[ply.id]['mark_position'] then
-		ent.position = makermod.players[ply.id]['mark_position'];
-		SendReliableCommand(ply.id, string.format('print "Object placed:%d  Origin: (%d %d %d)\n"', ent.id, math.floor(ent.position.x), math.floor(ent.position.y), math.floor(ent.position.z)))
-	end
-end
+	SetupEntity(ent)
 
-function makermod.mSpawnFX(ply, args, fx)
-	if #args < 1 then
-		SendReliableCommand(ply.id, string.format('print "Command usage:   ^5/mplacefx <effectname> <delay-between-firings-in-milliseconds> <optional-random-delay-component-in-ms>\n^71 second is 1000 milliseconds\n"'))
-		return
-	end
-
-	fx = fx or args[1]
-	local vars = {}
-	local plypos = ply.position
-	local plyang = ply.angles
-
-	local entpos = JPMath.AngleVectors(plyang, true, false, false)
-	entpos = plypos:MA(makermod.players[ply.id]['arm'], entpos)
-	
-		vars['classname'] = 'fx_runner'
-		vars['fxFile'] = fx
-
-		if args[2] then
-			-- default = 200
-			-- change to makermod-compatible
-			vars['delay'] = tonumber(args[2])
-			if args[3] then
-				vars['random'] = tonumber(args[3])
-			end
+	-- setting position
+	if plyob['autograbbing'] then
+		plyob['grabbed'][#plyob['grabbed'] + 1] = ent
+		plyob.print(string.format('Object grabbed:%d. Use /mgrabbing to turn off auto-grabbing.', ent.id))
+	else
+		if plyob['mark_position'] then
+			-- player has mmark
+			ent.position = plyob['mark_position']
+		else
+			-- player hasn't mmark
+			ent.position = ply.position:MA(plyob['arm'], JPMath.AngleVectors(ply.angles, true, false, false))
 		end
-
-	local ent = CreateEntity(vars)
-	ent.position = entpos
-	SetupEntity(ent, ply)
-	makermod.objects[ent.id]['fxFile'] = fx
-	
-	makermod.players[ply.id]['objects'][#makermod.players[ply.id]['objects']+1] = ent
-	makermod.players[ply.id]['selected'] = ent
-	if makermod.players[ply.id]['autograbbing'] then
-		SendReliableCommand(ply.id, string.format('print "Effect grabbed:%d. Use /mgrabbing to turn off auto-grabbing.\n"', ent.id))
-		makermod.players[ply.id]['grabbed'][#makermod.players[ply.id]['grabbed'] + 1] = ent
-	elseif makermod.players[ply.id]['mark_position'] then
-		ent.position = makermod.players[ply.id]['mark_position'];
-		SendReliableCommand(ply.id, string.format('print "Effect placed:%d  Origin: (%d %d %d)\n"', ent.id, math.floor(ent.position.x), math.floor(ent.position.y), math.floor(ent.position.z)))
+		plyob.print( string.format("Object placed:%d  Origin: (%d %d %d)", ent.id, math.floor(ent.position.x), math.floor(ent.position.y), math.floor(ent.position.z)) )
 	end
+
+	plyob['selected'] = ent
+	plyob['objects'][#plyob['objects'] + 1] = ent
 end
 
-function makermod.mKill(ply, args)
+
+-- mplacefx <effectname>
+-- mplacefx <effectname> <delay>
+-- mplacefx <effectname> <delay> <random-component>
+local function mPlaceFX(ply, args, plyob)
+	local fx = args[1]
+
+	-- wrong syntax
+	if not fx then
+		plyob.print('Command usage:   ^5/mplacefx <effectname> <delay-between-firings-in-milliseconds> <optional-random-delay-component-in-ms>\n^71 second is 1000 milliseconds')
+		return
+	end
+
+	-- making an entity
+	local vars = {}
+	vars['classname'] = 'fx_runner'
+	vars['fxFile'] = fx
+
+	-- delay
+	if args[2] then
+		vars['delay'] = tonumber(args[2])
+		if args[3] then
+			vars['random'] = tonumber(args[3])
+		end
+	end
+
+	local ent = CreateEntity(vars)
+	SetupEntity(ent)
+
+	-- setting position
+	if plyob['autograbbing'] then
+		plyob['grabbed'][#plyob['grabbed'] + 1] = ent
+		plyob.print(string.format('Effect grabbed:%d. Use /mgrabbing to turn off auto-grabbing.', ent.id))
+	else
+		if plyob['mark_position'] then
+			-- player has mmark
+			ent.position = plyob['mark_position']
+		else
+			-- player hasn't mmark
+			ent.position = ply.position:MA(plyob['arm'], JPMath.AngleVectors(ply.angles, true, false, false))
+		end
+		plyob.print( string.format('Effect placed:%d  Origin: (%d %d %d)', ent.id, math.floor(ent.position.x), math.floor(ent.position.y), math.floor(ent.position.z)) )
+	end
+
+	plyob['selected'] = ent
+	plyob['objects'][#plyob['objects'] + 1] = ent
+end
+
+
+function mKill(ply, args, plyob)
 	local mode = args[1]
+
 	if not mode then
 		-- mkill (selected object)
-		local ent = makermod.players[ply.id]['selected']
+		local ent = plyob['selected']
 		if not ent then return end
 
 		for k, v in pairs(makermod.players[ply.id]['objects']) do
@@ -330,17 +513,21 @@ function makermod.mKill(ply, args)
 		end
 
 		makermod.players[ply.id]['selected'] = nil
- 		RemoveEntity(ent)
- 	elseif mode == 'in' then
- 		-- mkill in <time>
- 		local time = tonumber(args[2])
- 		local ent = makermod.players[ply.id]['selected']
+		RemoveEntity(ent)
+
+	elseif mode == 'in' then
+
+		local ent = plyob['selected']
 		if not ent then return end
+
 		local data = {}
-		data['ply'] = ply
-		data['ent'] = ent
-		data['time'] = GetRealTime() + time
-	--	makermod.objects.tokill[#makermod.objects.tokill + 1] = data
+		data.type = 'killin'
+		data.ent = ent
+		data.start = GetRealTime()
+		data.time = tonumber(args[2])
+
+		makermod.AddTimer(data)
+
 	elseif mode == 'trace' then
 		-- mkill trace
 		local trace = TraceEntity(ply, nil)
@@ -373,39 +560,44 @@ function makermod.mKill(ply, args)
 	end
 end
 
-local function mMoveTime(ply, args)
-	if #args < 1 then
-		SendReliableCommand(ply.id, string.format('print "Your mmove time: %d ms (%d s)\n"', makermod.players[ply.id]['movetime'], makermod.players[ply.id]['movetime'] / 1000))
-		return
+-- kill in listener
+makermod.timerListeners['killin'] = function(object)
+	if object.start + object.time < GetRealTime() then
+		RemoveEntity(object.ent)
+		return false
 	end
-	local time = args[1]
-	makermod.players[ply.id]['movetime'] = tonumber(time)
 end
 
-local function mMove(ply, args)
+local function mMoveTime(ply, args, plyob)
+	if #args < 1 then
+		plyob.print(string.format("Your mmove time: %d ms (%d s)", makermod.players[ply.id]['movetime'], makermod.players[ply.id]['movetime'] / 1000))
+		return
+	end
+	local time = tonumber(args[1])
+	if time then
+		plyob['movetime'] = time
+	else
+		plyob.print("Wrong number!")
+	end
+end
+
+local function mMove(ply, args, plyob, ent)
 	-- wrong syntax
 	if #args < 1 then
-		SendReliableCommand(ply.id, 'print "Command usage:   ^5/mmove <speed>\n^7Command usage:   ^5/mmove <x> <y> <z>\n^7Command usage:   ^5/mmove <x> <y> <z> <duration> <easing>\n^7Type /mmove list for easing list.\n"')
+		plyob.print("Command usage:   ^5/mmove <speed>\n^7Command usage:   ^5/mmove <x> <y> <z>\n^7Command usage:   ^5/mmove <x> <y> <z> <duration> <easing>\n^7Type /mmove list for easing list.")
 		return
 	end
 
 	-- easing functions list
 	if args[1] == 'list' then
 		-- todo: minfo easing
-		SendReliableCommand(ply.id, string.format('print "%s.\n"', easinglist))
+		plyob.print(easinglist)
 		return
 	end
 
 
-	local ent = makermod.players[ply.id]['selected']
-	if not ent then return end
-
-	-- stopping the current moving
-	for k, v in pairs(makermod.objects.moving) do
-		if v.ent == ent and v.movingType == 'move' then
-			makermod.objects.moving[k] = nil
-		end
-	end
+	-- removing any timers
+	makermod.StopTimersExceptRotate(ent)
 
 	-- parsing the args:
 
@@ -418,7 +610,7 @@ local function mMove(ply, args)
 	-- mmove x y z dur easing
 	-- mmove x y z easing
 	local dest = Vector3(0, 0, 0)
-	local dur = makermod.players[ply.id]['movetime']
+	local dur = plyob['movetime']
 	local ease = 'linear'
 
 	if #args == 1 or #args == 2 or (#args == 3 and makermod.easing[args[3]]) then
@@ -477,40 +669,35 @@ local function mMove(ply, args)
 	else
 		-- animation
 		local data = {}
-		data.movingType = 'move'
+		data.type = 'move'
 		data.ent = ent
 		data.start = GetRealTime()
 		data.coords = dest
 		data.pos = ent.position
 		data.ease = ease
 		data.dur = dur
-		makermod.objects.moving[#makermod.objects.moving + 1] = data
+		makermod.AddTimer(data)
 	end
 end
 
-local function mRotate(ply, args)
+local function mRotate(ply, args, plyob, ent)
 	-- wrong syntax
 	if #args < 1 then
-		SendReliableCommand(ply.id, 'print "Command usage:   ^5/mrotate <x> <y> <z>\n^7Command usage:   ^5/mrotate <x> <y> <z> <duration> <easing>\n^7Type /mmove list for easing list.\n"')
+		plyob.print("Command usage:   ^5/mrotate <x> <y> <z>\n^7Command usage:   ^5/mrotate <x> <y> <z> <duration> <easing>\n^7Type /mmove list for easing list.")
 		return
 	end
 
-	local ent = makermod.players[ply.id]['selected']
-	if not ent then return end
-
 	-- stopping the current moving
-	for k, v in pairs(makermod.objects.moving) do
-		if v.ent == ent and v.movingType == 'rotate' then
-			makermod.objects.moving[k] = nil
+	for k, v in pairs(makermod.timers) do
+		if v.ent == ent and v.type == 'rotate' then
+			ent.angles = v.from
+			makermod.timers[k] = nil
+			break
 		end
 	end
 
-	if #args == 1 then
-		-- mrotate 0 -- for stopping rotating
-		-- mrotate clear -- clear angle
-		if args[1] == "clear" then
-			ent.angles = Vector3(0, 0, 0)
-		end
+	if args[1] == "clear" then
+		ent.angles = Vector3(0, 0, 0)
 		return
 	end
 
@@ -521,7 +708,7 @@ local function mRotate(ply, args)
 	-- mrotate x y z dur easing
 	-- mrotate x y z easing
 	local angle = Vector3(tonumber(args[1]), tonumber(args[2]), tonumber(args[3]))
-	local dur = makermod.players[ply.id]['movetime']
+	local dur = plyob['movetime']
 	local ease = 'linear'
 
 	if #args > 3 then
@@ -550,18 +737,18 @@ local function mRotate(ply, args)
 	else
 		-- animation
 		local data = {}
-		data.movingType = 'rotate'
+		data.type = 'rotate'
 		data.ent = ent
 		data.start = GetRealTime()
 		data.angle = angle
 		data.from = ent.angles
 		data.ease = ease
 		data.dur = dur
-		makermod.objects.moving[#makermod.objects.moving + 1] = data
+		makermod.AddTimer(data)
 	end
 end
 
-function makermod.mConnectTo(ply, args)
+function mConnectTo(ply, args)
 	if not makermod.players[ply.id]['selected'] then return end
 	
 	local trace = TraceEntity(ply, nil)
@@ -579,12 +766,12 @@ function makermod.mConnectTo(ply, args)
 	
 end
 
-function makermod.mTouchable(ply, args)
+function mTouchable(ply, args)
  if not makermod.players[ply.id]['selected'] then return end
  		makermod.players[ply.id]['selected'].touchable = true
 end
 
-function makermod.mUsable(ply, args)
+function mUsable(ply, args)
 	if not makermod.players[ply.id]['selected'] then return end
 	makermod.players[ply.id]['selected'].usable = true
 end
@@ -621,7 +808,7 @@ local function mTelesw(ply, args)
 				 end
 end
 
-function makermod.mDest(ply, args)
+function mDest(ply, args)
 	 if not makermod.players[ply.id]['selected'] then return end
 	 if #args >= 1 then
 		if args[1] == 'trace' then
@@ -642,7 +829,7 @@ local function mArm(ply, args)
 	makermod.players[ply.id]['arm'] = tonumber(arm) --ParseNumber(args, 1, 0,{makermod.players[ply.id]['arm']})[1]
 end
 
-local function mGrabbing(ply, args)
+local function mGrabbing(ply, args, plyob)
 	local state
 	if args[1] then
 		if args[1] == 'off' then
@@ -651,20 +838,20 @@ local function mGrabbing(ply, args)
 			state = false
 		end
 	else
-		state = makermod.players[ply.id]['autograbbing']
+		state = plyob['autograbbing']
 	end
 
 	if state then
-		makermod.players[ply.id]['autograbbing'] = false
-		SendReliableCommand(ply.id, string.format('print "Automatic Grabbing OFF.\n"'))
+		plyob['autograbbing'] = false
+		plyob.print("Automatic Grabbing OFF.")
 	else
-		makermod.players[ply.id]['autograbbing'] = true
-		SendReliableCommand(ply.id, string.format('print "Automatic Grabbing ON.\n"'))
+		plyob['autograbbing'] = true
+		plyob.print("Automatic Grabbing ON.")
 	end
 end
 
 
-function makermod.mSelect(ply, args)
+function mSelect(ply, args, plyob)
 	local trace = TraceEntity(ply, nil)
 	if trace.entityNum >= 0 then
 		local ent = GetEntity(trace.entityNum)
@@ -672,11 +859,12 @@ function makermod.mSelect(ply, args)
 		if not CheckEntity(ent, ply) then
 		 	return
 		end
-			makermod.players[ply.id]['selected'] = ent
+		plyob['selected'] = ent
+		plyob.print("Entity selected: " .. ent.id)
 	end
 end
 
-function makermod.mDrop(ply, args)
+function mDrop(ply, args)
 	if args[1] == 'all' then
 		makermod.players[ply.id]['grabbed'] = {}
 		return
@@ -688,7 +876,7 @@ function makermod.mDrop(ply, args)
 	end
 end
 
-function makermod.mGrab(ply, args)
+function mGrab(ply, args)
 	if not makermod.players[ply.id]['selected'] then return end
 	makermod.players[ply.id]['grabbed'][#makermod.players[ply.id]['grabbed'] + 1] = makermod.players[ply.id]['selected']
 end
@@ -733,7 +921,7 @@ local function mAnim(ply, args)
 	ply:SetAnim(args[1], 1, 1)
 end
 
-function makermod.mMark(ply, args)
+function mMark(ply, args)
 	local vec = ply.position
 	local i, type, res
 	if #args > 1 then
@@ -810,10 +998,15 @@ end
 local function mScaleMe(ply, args)
 	if #args < 1 then return end
 	local ent = ply.entity
-	ent:Scale(tonumber(args[1]))
+	local num = tonumber(args[1]) * 100
+	if num == 10.24 then end
+	if num < 1 then
+		num = 1
+	end
+	ent:Scale(num)
 end
 
-function makermod.mBreakable(ply, args)
+function mBreakable(ply, args)
 	if not makermod.players[ply.id]['selected'] then return end
 	if #args < 1 then return end
 	makermod.players[ply.id]['selected'].breakable = true
@@ -1056,47 +1249,53 @@ local function mListObs(ply, args)
 	SendReliableCommand(ply.id, string.format('print "%s"', str))
 end
 
-AddClientCommand('mplace', makermod.mSpawn) -- toolgun
-AddClientCommand('mplacefx', makermod.mSpawnFX) -- toolgun 
-AddClientCommand('mkill', makermod.mKill) -- toolgun
-AddClientCommand('mmovetime', mMoveTime)
-AddClientCommand('mmove', mMove)
-AddClientCommand('mrotate', mRotate)
-AddClientCommand('mconnectto', makermod.mConnectTo) -- toolgun
-AddClientCommand('mtouchable', makermod.mTouchable) -- toolgun
-AddClientCommand('musable', makermod.mUsable) -- toolgun
-AddClientCommand('mprintsw', mPrintsw)
-AddClientCommand('mdest', makermod.mDest) -- toolgun
-AddClientCommand('marm', mArm)
-AddClientCommand('mgrabbing', mGrabbing)
-AddClientCommand('mselect', makermod.mSelect) -- toolgun
-AddClientCommand('mdrop', makermod.mDrop) -- toolgun
-AddClientCommand('mgrab', makermod.mGrab) -- toolgun
-AddClientCommand('msetpassword', mSetPassword)
-AddClientCommand('mpassword', mPassword)
-AddClientCommand('mname', mName)
-AddClientCommand('mmark', makermod.mMark) -- toolgun
-AddClientCommand('mmarksave', mMarkSave)
-AddClientCommand('mmarkselect', mMarkSelect)
-AddClientCommand('morigin', mOrigin)
-AddClientCommand('manim', mAnim)
-AddClientCommand('mattachfx', mAttachFx)
-AddClientCommand('mscale', mScale)
-AddClientCommand('mscaleme', mScaleMe)
-AddClientCommand('mbreakable', makermod.mBreakable) -- toolgun
-AddClientCommand('mpain', mPain)
-AddClientCommand('mlist', mList)
-AddClientCommand('mlistfx', mListFx)
-AddClientCommand('mtelesp', mTelesp)
-AddClientCommand('mlistobs', mListObs)
 
-AddClientCommand('mellipse', mEllipse)
-AddClientCommand('mastroid', mAstroid)
-AddClientCommand('mspiral', mSpiral)
+makermod.AddCommand('mplace', mPlace) -- toolgun
+makermod.AddCommand('mplacefx', mPlaceFX) -- toolgun 
+makermod.AddCommand('mkill', mKill) -- toolgun
+makermod.AddCommand('mmovetime', mMoveTime)
+makermod.AddCommand('mmove', mMove, true)
+makermod.AddCommand('mrotate', mRotate, true)
+makermod.AddCommand('mconnectto', mConnectTo) -- toolgun
+makermod.AddCommand('mtouchable', mTouchable) -- toolgun
+makermod.AddCommand('musable', mUsable) -- toolgun
+makermod.AddCommand('mprintsw', mPrintsw)
+makermod.AddCommand('mdest', mDest) -- toolgun
+makermod.AddCommand('marm', mArm)
+makermod.AddCommand('mgrabbing', mGrabbing)
+makermod.AddCommand('mselect', mSelect) -- toolgun
+makermod.AddCommand('mdrop', mDrop) -- toolgun
+makermod.AddCommand('mgrab', mGrab) -- toolgun
+makermod.AddCommand('msetpassword', mSetPassword)
+makermod.AddCommand('mpassword', mPassword)
+makermod.AddCommand('mname', mName)
+makermod.AddCommand('mmark', mMark) -- toolgun
+makermod.AddCommand('mmarksave', mMarkSave)
+makermod.AddCommand('mmarkselect', mMarkSelect)
+makermod.AddCommand('morigin', mOrigin)
+makermod.AddCommand('manim', mAnim)
+makermod.AddCommand('mattachfx', mAttachFx)
+makermod.AddCommand('mscale', mScale)
+makermod.AddCommand('mscaleme', mScaleMe)
+makermod.AddCommand('mbreakable', mBreakable) -- toolgun
+makermod.AddCommand('mpain', mPain)
+makermod.AddCommand('mlist', mList)
+makermod.AddCommand('mlistfx', mListFx)
+makermod.AddCommand('mtelesp', mTelesp)
+makermod.AddCommand('mlistobs', mListObs)
+
+makermod.AddCommand('mellipse', mEllipse)
+makermod.AddCommand('mastroid', mAstroid)
+makermod.AddCommand('mspiral', mSpiral)
 
 makermod.toolgun.init()
 
-AddClientCommand('mlight', function(ply, args)
+makermod.AddCommand('minfo', function(ply)
+	SendReliableCommand(ply.id, 'print "^5 === New Features ===\n^1/mmovetime^7 -- default moving time.\n^1/mmove <x> <y> <z> <duration> <easing>^7\n^1/mmove list^7 -- easing list (use with Out and InOut: ^3bounce^7 -> ^3bounce^7, ^3bounceOut^7, ^3bounceInOut^7).\n^1/mrotate <x> <y> <z> <duration> <easing>^7\n^1/mgrabbing on / off^7\n^1/mdrop all^7 -- drops all grabbed objects.\n^1/mmarksave <name>^7, ^1/mmarkselect <name>^7 -- saves / selects current mark.\n^1/mellipse^7, ^1/mastroid^7, ^1/mspiral^7.\n^1Toolgun^7 (use the stun baton).\n\n\n^5 === Notes ===\n^7Use ^1/mkill all ^7instead of ^1/mkillall^7.\n^7Use anim number with manim (example: ^2/manim 150^7).\n^7Use bone names (r_hand, *r_hand, l_hand, *l_hand, head) with mattachfx.\n"')
+end)
+
+
+makermod.AddCommand('mlight', function(ply, args)
 	if #args < 1 then
 		SendReliableCommand(ply.id, string.format('print "Command usage:   ^5/mlight <intensity> <r> <g> <b>\n"'))
 		return

@@ -37,127 +37,64 @@ easing['elastic'] = function(x)
 	return 2 ^ (10 * x) * math.cos(20 * x * math.pi / 3)
 end
 
--- outs
-easing['swingOut'] = function(t) return 1 - easing['swing'](1 - t) end
-easing['springOut'] = function(t) return 1 - easing['spring'](1 - t) end
-easing['pulseOut'] = function(t) return 1 - easing['pulse'](1 - t) end
-easing['wobbleOut'] = function(t) return 1 - easing['wobble'](1 - t) end
-easing['easeOut'] = function(t) return 1 - easing['ease'](1 - t) end
-easing['cubicOut'] = function(t) return 1 - easing['cubic'](1 - t) end
-easing['quartOut'] = function(t) return 1 - easing['quart'](1 - t) end
-easing['quintOut'] = function(t) return 1 - easing['quint'](1 - t) end
-easing['expoOut'] = function(t) return 1 - easing['expo'](1 - t) end
-easing['circOut'] = function(t) return 1 - easing['circ'](1 - t) end
-easing['sineOut'] = function(t) return 1 - easing['sine'](1 - t) end
-easing['backOut'] = function(t) return 1 - easing['back'](1 - t) end
-easing['bounceOut'] = function(t) return 1 - easing['bounce'](1 - t) end
-easing['elasticOut'] = function(t) return 1 - easing['elastic'](1 - t) end
+-- outs & inouts
+for k, v in pairs(easing) do
+	easing[k .. 'Out'] = function(t) return (1 - v(1 - t)) end
+	easing[k .. 'InOut'] = function(t)
+		if t <= 0.5 then
+			return easing[k](2 * t) / 2
+		else
+			return (2 - easing[k](2 * (1 - t))) / 2
+		end
+	end
+end
 
--- inouts
-easing['swingInOut'] = function(x)
-	if x <= 0.5 then
-		return easing['swing'](2 * x) / 2
-	else
-		return (2 - easing['swing'](2 * (1 - x))) / 2
-	end
-end
-easing['springInOut'] = function(x)
-	if x <= 0.5 then
-		return easing['spring'](2 * x) / 2
-	else
-		return (2 - easing['spring'](2 * (1 - x))) / 2
-	end
-end
-easing['pulseInOut'] = function(x)
-	if x <= 0.5 then
-		return easing['pulse'](2 * x) / 2
-	else
-		return (2 - easing['pulse'](2 * (1 - x))) / 2
-	end
-end
-easing['wobbleInOut'] = function(x)
-	if x <= 0.5 then
-		return easing['wobble'](2 * x) / 2
-	else
-		return (2 - easing['wobble'](2 * (1 - x))) / 2
-	end
-end
-easing['easeInOut'] = function(x)
-	if x <= 0.5 then
-		return easing['ease'](2 * x) / 2
-	else
-		return (2 - easing['ease'](2 * (1 - x))) / 2
-	end
-end
-easing['cubicInOut'] = function(x)
-	if x <= 0.5 then
-		return easing['cubic'](2 * x) / 2
-	else
-		return (2 - easing['cubic'](2 * (1 - x))) / 2
-	end
-end
-easing['quartInOut'] = function(x)
-	if x <= 0.5 then
-		return easing['quart'](2 * x) / 2
-	else
-		return (2 - easing['quart'](2 * (1 - x))) / 2
-	end
-end
-easing['quintInOut'] = function(x)
-	if x <= 0.5 then
-		return easing['quint'](2 * x) / 2
-	else
-		return (2 - easing['quint'](2 * (1 - x))) / 2
-	end
-end
-easing['expoInOut'] = function(x)
-	if x <= 0.5 then
-		return easing['expo'](2 * x) / 2
-	else
-		return (2 - easing['expo'](2 * (1 - x))) / 2
-	end
-end
-easing['circInOut'] = function(x)
-	if x <= 0.5 then
-		return easing['circ'](2 * x) / 2
-	else
-		return (2 - easing['circ'](2 * (1 - x))) / 2
-	end
-end
-easing['sineInOut'] = function(x)
-	if x <= 0.5 then
-		return easing['sine'](2 * x) / 2
-	else
-		return (2 - easing['sine'](2 * (1 - x))) / 2
-	end
-end
-easing['backInOut'] = function(x)
-	if x <= 0.5 then
-		return easing['back'](2 * x) / 2
-	else
-		return (2 - easing['back'](2 * (1 - x))) / 2
-	end
-end
-easing['bounceInOut'] = function(x)
-	if x <= 0.5 then
-		return easing['bounce'](2 * x) / 2
-	else
-		return (2 - easing['bounce'](2 * (1 - x))) / 2
-	end
-end
-easing['elasticInOut'] = function(x)
-	if x <= 0.5 then
-		return easing['elastic'](2 * x) / 2
-	else
-		return (2 - easing['elastic'](2 * (1 - x))) / 2
-	end
-end
 
 -- for mmove list
 easinglist = 'linear, swing, spring, pulse, wobble, ease, cubic, quart, quint, expo, circ, sine, back, bounce, elastic'
 
+
+makermod.timerListeners['move'] = function(object)
+	local now = GetRealTime()
+	local delta = now - object.start
+	if t > 1 then
+		t = 1
+	end
+
+	local t = delta / object.dur
+	if object.ease ~= 'linear' and easing[object.ease] then
+		t = easing[object.ease](t)
+	end
+	local pos = object.pos + object.coords * t
+	object.ent.position = pos
+
+	if delta > object.dur then
+		return false
+	end
+end
+
+makermod.timerListeners['rotate'] = function(object)
+	local now = GetRealTime()
+	local delta = now - object.start
+
+	local t = delta / object.dur
+	if t > 1 then
+		t = 1
+	end
+
+	if object.ease ~= 'linear' and easing[object.ease] then
+		t = easing[object.ease](t)
+	end
+	local ang = object.from + object.angle * t
+	object.ent.angles = ang
+
+	if delta > object.dur then
+		return false
+	end
+end
+
 -- WIP movings
-local steps = {}
+--[[local steps = {}
 steps['ellipse_inf'] = function(object)
 	local now = GetRealTime()
 	local period = object.period
@@ -279,4 +216,4 @@ function AnimStep(object)
 	local pos = Vector3(object.pos.x + object.coords.x * t, object.pos.y + object.coords.y * t, object.pos.z + object.coords.z * t)
 	object.ent.position = pos
 
-end
+end --]]
