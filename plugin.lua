@@ -43,20 +43,6 @@ local function MainLoop()
 			end
 		end
 	end
-
---[[
-	for k, v in pairs(makermod.objects.moving) do
-		if AnimStep(v) == false then
-			makermod.objects.moving[k] = nil
-		end
-	end
-
-	for k, v in pairs(makermod.objects.attached) do
-		local bone = v['ply']:GetBoneVector(v['bone'])
-		if bone then
-			v['ent'].position = v['align'] + bone
-		end
-	end ]]--
 end
 
 AddListener('JPLUA_EVENT_RUNFRAME', MainLoop)
@@ -93,6 +79,28 @@ end
 
 AddListener('JPLUA_EVENT_CLIENTSPAWN', makermod.RegUser)
 
+
+-- Adds a loop callback
+function makermod.AddTimer(object)
+	makermod.timers[#makermod.timers + 1] = object
+end
+
+-- Removes timers
+function makermod.StopAllTimers(ent)
+	for k, v in pairs(makermod.timers) do
+		if v.ent == ent then
+			makermod.timers[k] = nil
+		end
+	end
+end
+
+function makermod.StopTimersExceptRotate(ent)
+	for k, v in pairs(makermod.timers) do
+		if v.type ~= 'rotate' and v.ent == ent then
+			makermod.timers[k] = nil
+		end
+	end
+end
 
 -- Adds new command
 function makermod.AddCommand(name, func, selectedObj)
@@ -175,8 +183,20 @@ function makermod.Run(code, ply)
 				currentArgument = ""
 				currentArgumentId = 1
 
-			--	commands[currentCommandId] = { name = currentCommand, args = currentArguments }
-				makermod.Exec(currentCommand, ply, currentArguments)
+				if currentCommand == 'wait' then
+					local delay = currentArguments[1]
+					local next = string.sub(code, i+1, len)
+					local data = {}
+					data['type'] = 'runtimer'
+					data['start'] = GetRealTime()
+					data['delay'] = tonumber(delay)
+					data['code'] = next
+					data['player'] = ply
+					makermod.AddTimer(data)
+					return
+				else
+					makermod.Exec(currentCommand, ply, currentArguments)
+				end
 
 				currentCommand = ""
 				currentCommandId = currentCommandId + 1
@@ -201,27 +221,13 @@ function makermod.Run(code, ply)
 	end
 end
 
--- Adds a loop callback
-function makermod.AddTimer(object)
-	makermod.timers[#makermod.timers + 1] = object
-end
-
--- Removes timers
-function makermod.StopAllTimers(ent)
-	for k, v in pairs(makermod.timers) do
-		if v.ent == ent then
-			makermod.timers[k] = nil
-		end
+makermod.timerListeners['runtimer'] = function(object)
+	if object.start + object.delay <= GetRealTime() then
+		makermod.Run(object.code, object.player)
+		return false
 	end
 end
 
-function makermod.StopTimersExceptRotate(ent)
-	for k, v in pairs(makermod.timers) do
-		if v.type ~= 'rotate' and v.ent == ent then
-			makermod.timers[k] = nil
-		end
-	end
-end
 
 
 
@@ -1121,14 +1127,24 @@ local function mScaleMe(ply, args)
 	ent:Scale(num)
 end
 
-function mBreakable(ply, args)
-	if not makermod.players[ply.id]['selected'] then return end
+local function mBreakable(ply, args, plyob, ent)
 	if #args < 1 then return end
-	makermod.players[ply.id]['selected'].breakable = true
-	makermod.players[ply.id]['selected'].health = tonumber(args[1])
-	makermod.players[ply.id]['selected']:SetDieFunction( function(a,b,c, d,e) 
-															RemoveEntity(a)
-															end )
+	plyob['selected'].breakable = true
+	plyob['selected'].health = tonumber(args[1])
+	plyob['selected']:SetDieFunction( function(a,b,c, d,e) 
+		if makermod.objects[ent.id]['ondie'] then
+			makermod.Run(makermod.objects[ent.id]['ondie'], ply)
+		end
+		RemoveEntity(a)
+	end )
+end
+
+local function mOnDie(ply, args, plyob, ent)
+	if #args < 1 then
+		plyob.print("Command usage:   ^5/mondie <commands>\n^7Example:   ^3/mondie \"mplacefx env/fire; wait 1000; mkill\"")
+		return
+	end
+	makermod.objects[ent.id]['ondie'] = args[1]
 end
 
 local function mPain(ply, args)
@@ -1412,7 +1428,8 @@ makermod.AddCommand('mattachfx', mAttachFx, true)
 makermod.AddCommand('mattachob', mAttachOb, true)
 makermod.AddCommand('mscale', mScale)
 makermod.AddCommand('mscaleme', mScaleMe)
-makermod.AddCommand('mbreakable', mBreakable) -- toolgun
+makermod.AddCommand('mbreakable', mBreakable, true)
+makermod.AddCommand('mondie', mOnDie, true)
 makermod.AddCommand('mpain', mPain)
 makermod.AddCommand('mlist', mList)
 makermod.AddCommand('mlistfx', mListFx)
@@ -1429,5 +1446,3 @@ makermod.toolgun.init()
 makermod.AddCommand('minfo', function(ply)
 	SendReliableCommand(ply.id, 'print "^5 === New Features ===\n^1/mmovetime^7 -- default moving time.\n^1/mmove <x> <y> <z> <duration> <easing>^7\n^1/mmove list^7 -- easing list (use with Out and InOut: ^3bounce^7 -> ^3bounce^7, ^3bounceOut^7, ^3bounceInOut^7).\n^1/mrotate <x> <y> <z> <duration> <easing>^7\n^1/mgrabbing on / off^7\n^1/mdrop all^7 -- drops all grabbed objects.\n^1/mmarksave <name>^7, ^1/mmarkselect <name>^7 -- saves / selects current mark.\n^1/mellipse^7, ^1/mastroid^7, ^1/mspiral^7.\n^1Toolgun^7 (use the stun baton).\n\n\n^5 === Notes ===\n^7Use ^1/mkill all ^7instead of ^1/mkillall^7.\n^7Use anim number with manim (example: ^2/manim 150^7).\n^7Use bone names (r_hand, *r_hand, l_hand, *l_hand, head) with mattachfx.\n"')
 end)
-
-
