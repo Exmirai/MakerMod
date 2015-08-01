@@ -43,6 +43,7 @@ local function MainLoop()
 			end
 		end
 	end
+
 --[[
 	for k, v in pairs(makermod.objects.moving) do
 		if AnimStep(v) == false then
@@ -402,6 +403,60 @@ AddListener('JPLUA_EVENT_CLIENTDISCONNECT',onUserDisconnect)
   ]]--
 
 
+-- Special objects
+local specialObjects = {
+	stunbaton = 'weapon_stun_baton',
+	melee = 'weapon_melee',
+	saber = 'weapon_saber',
+	blasterpistol = 'weapon_blaster_pistol',
+	concussionrifle = 'weapon_concussion_rifle',
+	bryarpistol = 'weapon_bryar_pistol',
+	blaster = 'weapon_blaster',
+	disruptor = 'weapon_disruptor',
+	bowcaster = 'weapon_bowcaster',
+	repeater = 'weapon_repeater',
+	demp2 = 'weapon_demp2',
+	flechette = 'weapon_flechette',
+	rocket = 'weapon_rocket_launcher',
+
+	smallarmor = 'item_shield_sm_instant',
+	armor = 'item_shield_lrg_instant',
+	medpak = 'item_medpak_instant',
+	seeker = 'item_seeker',
+	shield = 'item_shield',
+	bacta = 'item_medpac',
+	bigbacta = 'item_medpac_big',
+	binoculars = 'item_binoculars',
+	sentry = 'item_sentry_gun',
+	jetpack = 'item_jetpack',
+	healthdisp = 'item_healthdisp',
+	ammodisp = 'item_ammodisp',
+	eweb = 'item_eweb_holdable',
+	cloak = 'item_cloak',
+	enlightenlight = 'item_force_enlighten_light',
+	enlightendark = 'item_force_enlighten_dark',
+	boon = 'item_force_boon',
+	ysalimari = 'item_ysalimari',
+	thermal = 'ammo_thermal', -- weapon_thermal ?
+	tripmine = 'ammo_tripmine', -- weapon_trip_mine ?
+	detpack = 'ammo_detpack', -- weapon_det_pack ?
+	force = 'ammo_force',
+	blasterammo = 'ammo_blaster',
+	powercell = 'ammo_powercell',
+	bolts = 'ammo_metallic_bolts',
+	rockets = 'ammo_rockets',
+	allammo = 'ammo_all',
+	redcube = 'item_redcube',
+	bluecube = 'item_bluecube',
+
+	gun = '',
+	ammounit = '',
+	shieldunit = '',
+	turret = '',
+	miniturret = '',
+	deathturret = ''
+}
+
 
 -- mplace <foldername/modelname>
 -- mplace <modelpath>
@@ -415,15 +470,20 @@ local function mPlace(ply, args, plyob)
 		return
 	end
 
-	-- factory/catw2_b instead of models/map_objects/factory/catw2_b.md3
-	if not string.match(model, 'models/map_objects') then
-		model = 'models/map_objects/' .. model .. '.md3'
-	end
-
-	-- making an entity
 	local vars = {}
-	vars['classname'] = 'misc_model'
-	vars['model'] = model
+	if specialObjects[model] then
+		vars['classname'] = specialObjects[model]
+	else
+
+		-- factory/catw2_b instead of models/map_objects/factory/catw2_b.md3
+		if not string.match(model, 'models/map_objects') then
+			model = 'models/map_objects/' .. model .. '.md3'
+		end
+
+		-- making an entity
+		vars['classname'] = 'misc_model'
+		vars['model'] = model
+	end
 
 	local ent = CreateEntity(vars)
 	SetupEntity(ent)
@@ -517,6 +577,7 @@ function mKill(ply, args, plyob)
 		end
 
 		makermod.players[ply.id]['selected'] = nil
+		makermod.StopAllTimers(ent)
 		RemoveEntity(ent)
 
 	elseif mode == 'in' then
@@ -557,6 +618,7 @@ function mKill(ply, args, plyob)
 		makermod.players[ply.id]['grabbed'] = {}
 		for _, ent in pairs(makermod.players[ply.id]['objects']) do
 			if ent then
+				makermod.StopAllTimers(ent)
 				RemoveEntity(ent)
 			end
 		end
@@ -602,6 +664,13 @@ local function mMove(ply, args, plyob, ent)
 
 	-- removing any timers
 	makermod.StopTimersExceptRotate(ent)
+
+	-- removing a grabbing
+	for k, v in pairs(plyob['grabbed']) do
+		if v == ent then
+			plyob['grabbed'][k] = nil
+		end
+	end
 
 	-- parsing the args:
 
@@ -691,7 +760,7 @@ local function mRotate(ply, args, plyob, ent)
 		return
 	end
 
-	-- stopping the current moving
+	-- stopping the current rotating
 	for k, v in pairs(makermod.timers) do
 		if v.ent == ent and v.type == 'rotate' then
 			ent.angles = v.from
@@ -972,15 +1041,57 @@ local function mOrigin(ply)
 	SendReliableCommand(ply.id, string.format('print "Origin: (%d %d %d)\n"', math.floor(vec.x), math.floor(vec.y), math.floor(vec.z)))
 end
 
-local function mAttachFx(ply, args)
-	if not makermod.players[ply.id]['selected'] then return end
-	if #args < 1 then return end
-	local temp = {}
-	temp['bone'] = args[1]
-	temp['ply'] = ply.entity
-	temp['ent'] = makermod.players[ply.id]['selected']
-	temp['align'] = ParseVector(Vector3(0,0,0), args, 1)
-	makermod.objects.attached[#makermod.objects.attached + 1] = temp
+-- l_arm, *l_arm
+-- r_arm, *r_arm
+-- torso_collar
+
+
+local function mAttachFx(ply, args, plyob, ent)
+	if #args < 1 then
+		plyob.print("Command usage:   ^5/mattachfx <bolt id>, attach to existing bone.\nCommand usage:   ^5/mattachfx <bone name>, attach to bone, creating new bolt if needed")
+		return
+	end
+	if ent.classname ~= 'fx_runner' then
+		plyob.print('This object is not an effect.')
+		return
+	end
+	makermod.StopTimersExceptRotate(ent)
+	local data = {}
+	data['type'] = 'attach'
+	data['bone'] = args[1]
+	data['ply'] = ply.entity
+	data['ent'] = ent
+	data['align'] = ParseVector(Vector3(0,0,0), args, 1)
+	makermod.AddTimer(data)
+end
+
+local function mAttachOb(ply, args, plyob, ent)
+	if #args < 1 then
+		plyob.print("Command usage:   ^5/mattachob <bolt id>, attach to existing bone.\nCommand usage:   ^5/mattachob <bone name>, attach to bone, creating new bolt if needed")
+		return
+	end
+	if ent.classname ~= 'misc_model' then
+		plyob.print('This object is not an model object.')
+		return
+	end
+
+	ent.contents = 2
+	makermod.StopTimersExceptRotate(ent)
+	local data = {}
+	data['type'] = 'attach'
+	data['bone'] = args[1]
+	data['ply'] = ply.entity
+	data['ent'] = ent
+	data['align'] = ParseVector(Vector3(0,0,0), args, 1)
+	makermod.AddTimer(data)
+end
+
+
+makermod.timerListeners['attach'] = function(object)
+	local bone = object['ply']:GetBoneVector(object['bone'])
+	if bone then
+		object['ent'].position = object['align'] + bone
+	end
 end
 
 local function mScale(ply, args)
@@ -991,11 +1102,11 @@ local function mScale(ply, args)
 			local ent = GetEntity(trace.entityNum)
 			if not ent then return end
 			if not CheckEntity(ent, ply) then return end
-			ent:Scale(tonumber(args[2]))
+			ent:Scale(tonumber(args[2]) * 100)
 		end
 	else
 		if not makermod.players[ply.id]['selected'] then return end
-		makermod.players[ply.id]['selected']:Scale(tonumber(args[1]))
+		makermod.players[ply.id]['selected']:Scale(tonumber(args[1]) * 100)
 	end
 end
 
@@ -1253,6 +1364,25 @@ local function mListObs(ply, args)
 	SendReliableCommand(ply.id, string.format('print "%s"', str))
 end
 
+local function mLight(ply, args, plyob, ent)
+	if #args < 1 then
+		plyob.print("Command usage:   ^5/mlight <intensity> <r> <g> <b>")
+		return
+	end
+	local light = {}
+	light['a'] = args[1]
+	if #args > 1 then
+		light['r'] = args[2]
+		light['g'] = args[3]
+		light['b'] = args[4]
+	else
+		light['r'] = 0.255
+		light['g'] = 0.255
+		light['b'] = 0.255
+	end
+
+	ent.light = light
+end
 
 makermod.AddCommand('mplace', mPlace) -- toolgun
 makermod.AddCommand('mplacefx', mPlaceFX) -- toolgun 
@@ -1278,7 +1408,8 @@ makermod.AddCommand('mmarksave', mMarkSave)
 makermod.AddCommand('mmarkselect', mMarkSelect)
 makermod.AddCommand('morigin', mOrigin)
 makermod.AddCommand('manim', mAnim)
-makermod.AddCommand('mattachfx', mAttachFx)
+makermod.AddCommand('mattachfx', mAttachFx, true)
+makermod.AddCommand('mattachob', mAttachOb, true)
 makermod.AddCommand('mscale', mScale)
 makermod.AddCommand('mscaleme', mScaleMe)
 makermod.AddCommand('mbreakable', mBreakable) -- toolgun
@@ -1287,6 +1418,7 @@ makermod.AddCommand('mlist', mList)
 makermod.AddCommand('mlistfx', mListFx)
 makermod.AddCommand('mtelesp', mTelesp)
 makermod.AddCommand('mlistobs', mListObs)
+makermod.AddCommand('mlight', mLight, true)
 
 makermod.AddCommand('mellipse', mEllipse)
 makermod.AddCommand('mastroid', mAstroid)
@@ -1299,85 +1431,3 @@ makermod.AddCommand('minfo', function(ply)
 end)
 
 
-makermod.AddCommand('mlight', function(ply, args)
-	if #args < 1 then
-		SendReliableCommand(ply.id, string.format('print "Command usage:   ^5/mlight <intensity> <r> <g> <b>\n"'))
-		return
-	end
-
-	local ent = makermod.players[ply.id]['selected']
-	if not ent then return end
-
-	local vars = {}
-
-	vars['classname'] = 'func_static'
-	vars['model'] = '*2'
-	vars['light'] = tonumber(args[1])
-	if #args > 1 then
-		vars['color'] = string.format('%s %s %s', args[2], args[3], args[4])
-	end
-
-	local ent = CreateEntity(vars)
-	ent.position = ent.position
-end)
-
-
---[[
-
-mlistso
-mlistso weapons
-mlistso items
-mlistso machines
-
-stunbaton
-melee
-saber
-blasterpistol
-concussionrifle
-bryarpistol
-blaster
-disruptor
-bowcaster
-repeater
-demp2
-flechette
-rocket
-
-smallarmor
-armor
-medpak
-seeker
-shield
-bacta
-bigbacta
-binoculars
-sentry
-jetpack
-healthdisp
-ammodisp
-eweb
-cloak
-enlightenlight
-enlightendark
-boon
-ysalimari
-thermal
-tripmine
-detpack
-force
-blasterammo
-powercell
-bolts
-rockets
-allammo
-redcube
-bluecube
-
-gun
-ammounit
-shieldunit
-turret
-miniturret
-deathturret
-
-]]--

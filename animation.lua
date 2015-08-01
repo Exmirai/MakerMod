@@ -57,11 +57,12 @@ easinglist = 'linear, swing, spring, pulse, wobble, ease, cubic, quart, quint, e
 makermod.timerListeners['move'] = function(object)
 	local now = GetRealTime()
 	local delta = now - object.start
+
+	local t = delta / object.dur
 	if t > 1 then
 		t = 1
 	end
 
-	local t = delta / object.dur
 	if object.ease ~= 'linear' and easing[object.ease] then
 		t = easing[object.ease](t)
 	end
@@ -122,7 +123,19 @@ steps['ellipse'] = function(object)
 	-- converting from degrees to radians
 	angle = (angle / 180) * 3.14159265358979323
 
-	local center = object.center
+
+
+
+
+
+
+
+
+
+
+
+
+local center = object.center
 	local pos = Vector3(center.x + object.rx * math.cos(angle), center.y + object.ry * math.sin(angle), center.z)
 	object.ent.position = pos
 end
