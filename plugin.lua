@@ -1398,7 +1398,127 @@ local function mLight(ply, args, plyob, ent)
 	end
 
 	ent.light = light
+	makermod.objects[ent.id].lightA = tonumber(args[1])
 end
+
+local function mLightTo(ply, args, plyob, ent)
+	if #args < 1 then
+		plyob.print("Command usage:   ^5/mlightto <intensity> <r> <g> <b>")
+		return
+	end
+
+	for k, v in pairs(makermod.timers) do
+		if v.ent == ent and v.type == 'light' then
+			makermod.timers[k] = nil
+			break
+		end
+	end
+
+	-- parsing the args:
+
+	local data = {}
+	local dur = plyob['movetime']
+	local ease = 'linear'
+
+	-- mlightto <i>
+	-- mlightto <i> <dur>
+	-- mlightto <i> <easing>
+	-- mlightto <i> <dur> <easing>
+	-- mlightto <i> <r> <g> <b>
+	-- mlightto <i> <r> <g> <b> <dur>
+	-- mlightto <i> <r> <g> <b> <easing>
+	-- mlightto <i> <r> <g> <b> <dur> <easing>
+
+	data['a'] = tonumber(args[1])
+
+	-- only intensity
+	if #args == 2 then
+		if makermod.easing[args[2]] then
+			-- mlightto <i> <easing>
+			ease = args[2]
+		else
+			-- mlightto <i> <dur>
+			dur = args[2]
+		end
+	elseif #args == 3 then
+		-- mlightto <i> <dur> <easing>
+		dur = args[2]
+		ease = args[3]
+	else
+		-- r, g, b
+		data['r'] = tonumber(args[2])
+		data['g'] = tonumber(args[3])
+		data['b'] = tonumber(args[4])
+
+		if #args == 5 then
+			if makermod.easing[args[5]] then
+				-- mlight <i> <r> <g> <b> <easing>
+				ease = args[5]
+			else
+				-- mlight <i> <r> <g> <b> <dur>
+				dur = args[5]
+			end
+		elseif #args == 6 then
+			-- mlight <i> <r> <g> <b> <dur> <easing>
+			dur = args[5]
+			ease = args[6]
+		end
+	end
+
+	if not data['r'] then
+		data['r'] = ent.light['r']
+		data['g'] = ent.light['g']
+		data['b'] = ent.light['b']
+	end
+
+
+	dur = tonumber(dur)
+
+	-- animating
+	if dur == 0 then
+		ent.light = data
+	else
+		-- animation
+		data.type = 'light'
+		data.ent = ent
+		data.start = GetRealTime()
+		data.from = ent.light
+
+		data.ease = ease
+		data.dur = dur
+
+		data['r'] = data['r'] - ent.light['r']
+		data['g'] = data['g'] - ent.light['g']
+		data['b'] = data['b'] - ent.light['b']
+		data['a'] = data['a'] - makermod.objects[ent.id].lightA
+		makermod.AddTimer(data)
+	end
+end
+
+makermod.timerListeners['light'] = function(object)
+	local now = GetRealTime()
+	local delta = now - object.start
+
+	local t = delta / object.dur
+	if t > 1 then
+		t = 1
+	end
+
+	if object.ease ~= 'linear' and easing[object.ease] then
+		t = easing[object.ease](t)
+	end
+	local light = {}
+	light['r'] = object.from['r'] + object['r'] * t
+	light['g'] = object.from['g'] + object['g'] * t
+	light['b'] = object.from['b'] + object['b'] * t
+	light['a'] = makermod.objects[object.ent.id].lightA + object['a'] * t
+	object.ent.light = light
+
+	if delta > object.dur then
+		return false
+	end
+end
+
 
 makermod.AddCommand('mplace', mPlace) -- toolgun
 makermod.AddCommand('mplacefx', mPlaceFX) -- toolgun 
@@ -1436,6 +1556,7 @@ makermod.AddCommand('mlistfx', mListFx)
 makermod.AddCommand('mtelesp', mTelesp)
 makermod.AddCommand('mlistobs', mListObs)
 makermod.AddCommand('mlight', mLight, true)
+makermod.AddCommand('mlightto', mLightTo, true)
 
 makermod.AddCommand('mellipse', mEllipse)
 makermod.AddCommand('mastroid', mAstroid)
