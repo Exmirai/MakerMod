@@ -1407,6 +1407,10 @@ local function mLightTo(ply, args, plyob, ent)
 		return
 	end
 
+	if not makermod.objects[ent.id].lightA then
+		makermod.objects[ent.id].lightA = 0
+	end
+
 	for k, v in pairs(makermod.timers) do
 		if v.ent == ent and v.type == 'light' then
 			makermod.timers[k] = nil
@@ -1477,12 +1481,18 @@ local function mLightTo(ply, args, plyob, ent)
 	-- animating
 	if dur == 0 then
 		ent.light = data
+		makermod.objects[ent.id].lightA = data['a']
 	else
 		-- animation
 		data.type = 'light'
 		data.ent = ent
 		data.start = GetRealTime()
-		data.from = ent.light
+		data.from = {
+			a = makermod.objects[ent.id].lightA,
+			r = ent.light['r'],
+			g = ent.light['g'],
+			b = ent.light['b']
+		}
 
 		data.ease = ease
 		data.dur = dur
@@ -1491,6 +1501,7 @@ local function mLightTo(ply, args, plyob, ent)
 		data['g'] = data['g'] - ent.light['g']
 		data['b'] = data['b'] - ent.light['b']
 		data['a'] = data['a'] - makermod.objects[ent.id].lightA
+
 		makermod.AddTimer(data)
 	end
 end
@@ -1507,12 +1518,16 @@ makermod.timerListeners['light'] = function(object)
 	if object.ease ~= 'linear' and easing[object.ease] then
 		t = easing[object.ease](t)
 	end
-	local light = {}
-	light['r'] = object.from['r'] + object['r'] * t
-	light['g'] = object.from['g'] + object['g'] * t
-	light['b'] = object.from['b'] + object['b'] * t
-	light['a'] = makermod.objects[object.ent.id].lightA + object['a'] * t
-	object.ent.light = light
+	local newlight = {}
+
+	newlight['r'] = object.from['r'] + object['r'] * t
+	newlight['g'] = object.from['g'] + object['g'] * t
+	newlight['b'] = object.from['b'] + object['b'] * t
+	newlight['a'] = object.from['a'] + object['a'] * t
+
+	print(string.format('r: %f; g: %f; b: %f; a: %f', newlight['r'], newlight['g'], newlight['b'], newlight['a']))
+	makermod.objects[object.ent.id].lightA = newlight['a']
+	object.ent.light = newlight
 
 	if delta > object.dur then
 		return false
