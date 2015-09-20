@@ -101,7 +101,7 @@ function toolgun.init()
 	toolgun.modes['trace'] = TTrace
 		toolgun.modes[5] = 'trace'
 
-	SetWeaponFireFunc(Weapons.STUN_BATON, Fire)
-	SetWeaponAltFireFunc(Weapons.STUN_BATON, AltFire)
+--	SetWeaponFireFunc(Weapons.STUN_BATON, Fire)
+--	SetWeaponAltFireFunc(Weapons.STUN_BATON, AltFire)
 end
 

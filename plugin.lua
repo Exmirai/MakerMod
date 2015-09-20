@@ -60,10 +60,12 @@ function makermod.RegUser(ply)
 	plyob.arm = 200
 	plyob.movetime = 10000
 	plyob.autograbbing = true
+	plyob.names = {}
 	plyob.objects = {}
 	plyob.password = ''
 	plyob.mark_position = nil
 	plyob.marks = {}
+	plyob.groups = {}
 
 	-- commands
 	plyob.print = function(str)
@@ -227,7 +229,6 @@ makermod.timerListeners['runtimer'] = function(object)
 		return false
 	end
 end
-
 
 
 
@@ -565,28 +566,7 @@ end
 function mKill(ply, args, plyob)
 	local mode = args[1]
 
-	if not mode then
-		-- mkill (selected object)
-		local ent = plyob['selected']
-		if not ent then return end
-
-		for k, v in pairs(makermod.players[ply.id]['objects']) do
-			if ent and v == ent then
-				makermod.players[ply.id]['objects'][k] = nil
-			end
-		end
-
-		for k, v in pairs(makermod.players[ply.id]['grabbed']) do
-			if v == ent then
-				makermod.players[ply.id]['grabbed'][k] = nil
-			end
-		end
-
-		makermod.players[ply.id]['selected'] = nil
-		makermod.StopAllTimers(ent)
-		RemoveEntity(ent)
-
-	elseif mode == 'in' then
+	if mode == 'in' then
 
 		local ent = plyob['selected']
 		if not ent then return end
@@ -618,6 +598,7 @@ function mKill(ply, args, plyob)
 				return
 			end
 		end
+
 	elseif mode == 'all' then
 		-- mkill all
 		makermod.players[ply.id]['selected'] = nil
@@ -629,6 +610,49 @@ function mKill(ply, args, plyob)
 			end
 		end
 		makermod.players[ply.id]['objects'] = {}
+
+	elseif mode and string.sub(mode, 0, 1) == '#' then
+		-- mkill #id
+		mode = string.sub(mode, 2)
+		local ent = plyob.names[mode]
+		if not ent then return end
+		for k, v in pairs(makermod.players[ply.id]['objects']) do
+			if ent and v == ent then
+				makermod.players[ply.id]['objects'][k] = nil
+			end
+		end
+
+		for k, v in pairs(makermod.players[ply.id]['grabbed']) do
+			if v == ent then
+				makermod.players[ply.id]['grabbed'][k] = nil
+			end
+		end
+
+		makermod.players[ply.id]['selected'] = nil
+		makermod.StopAllTimers(ent)
+		RemoveEntity(ent)
+
+		-- todo: remove ob from names
+
+	else
+		local ent = plyob['selected']
+		if not ent then return end
+
+		for k, v in pairs(makermod.players[ply.id]['objects']) do
+			if ent and v == ent then
+				makermod.players[ply.id]['objects'][k] = nil
+			end
+		end
+
+		for k, v in pairs(makermod.players[ply.id]['grabbed']) do
+			if v == ent then
+				makermod.players[ply.id]['grabbed'][k] = nil
+			end
+		end
+
+		makermod.players[ply.id]['selected'] = nil
+		makermod.StopAllTimers(ent)
+		RemoveEntity(ent)
 	end
 end
 
@@ -899,13 +923,12 @@ function mDest(ply, args)
 	end
 end
 
-local function mArm(ply, args)
+local function mArm(ply, args, plyob)
 	if #args < 1 then
-		SendReliableCommand(ply.id, string.format('print "Marm: %d\n"', makermod.players[ply.id]['arm']))
+		plyob.print("Marm: " .. plyob['arm'])
 		return
 	end
-	local arm = args[1]
-	makermod.players[ply.id]['arm'] = tonumber(arm) --ParseNumber(args, 1, 0,{makermod.players[ply.id]['arm']})[1]
+	plyob['arm'] = tonumber(args[1]) --ParseNumber(args, 1, 0,{makermod.players[ply.id]['arm']})[1]
 end
 
 local function mGrabbing(ply, args, plyob)
@@ -931,15 +954,24 @@ end
 
 
 function mSelect(ply, args, plyob)
-	local trace = TraceEntity(ply, nil)
-	if trace.entityNum >= 0 then
-		local ent = GetEntity(trace.entityNum)
-		if not ent then return end
-		if not CheckEntity(ent, ply) then
-		 	return
+	if #args == 1 then
+		if not plyob.names[args[1]] then
+			plyob.print("There is no object.")
+			return
 		end
-		plyob['selected'] = ent
-		plyob.print("Entity selected: " .. ent.id)
+		plyob['selected'] = plyob.names[args[1]]
+		plyob.print("Entity selected: " .. plyob['selected'].id)
+	else
+		local trace = TraceEntity(ply, nil)
+		if trace.entityNum >= 0 then
+			local ent = GetEntity(trace.entityNum)
+			if not ent then return end
+			if not CheckEntity(ent, ply) then
+			 	return
+			end
+			plyob['selected'] = ent
+			plyob.print("Entity selected: " .. ent.id)
+		end
 	end
 end
 
@@ -989,10 +1021,8 @@ local function mDoor(ply, args)
 
 end
 
-local function mName(ply, args)
-	if not makermod.players[ply.id]['selected'] then return end
-    if #args < 1 then return end
-    makermod.objects[makermod.players[ply.id]['selected'].id]['name'] = args[1]
+local function mName(ply, args, plyob, ent)
+	plyob.objects[args[1]] = ent
 end
 
 local function mAnim(ply, args)
@@ -1000,11 +1030,16 @@ local function mAnim(ply, args)
 	ply:SetAnim(args[1], 1, 1)
 end
 
-function mMark(ply, args)
+function mMark(ply, args, plyob)
 	local vec = ply.position
 	local i, type, res
 	if #args > 1 then
-		vec = ParseVector(vec, args, 0)
+		vec = ParseVector(Vector3(0,0,0), args, 0)
+	elseif args[1] and string.sub(args[1], 0, 1) == '#' then
+		-- mmark #id
+		local ent = plyob.names[string.sub(args[1], 2)]
+		if not ent then return end
+		vec = ent.position
 	end
 	if not makermod.players[ply.id]['mark_position'] then
 		makermod.players[ply.id]['autograbbing'] = false
@@ -1534,6 +1569,64 @@ makermod.timerListeners['light'] = function(object)
 	end
 end
 
+-- Groups --
+------------
+
+makermod.AddCommand('mleadgroupcreate', function(ply, args, plyob)
+
+	plyob.groups[args[1]] = {}
+	if #args > 1 then
+		for k, v in args do
+			print(v);
+		end
+	end
+
+end)
+
+makermod.AddCommand('mleadgroupadd', function(ply, args, plyob)
+
+	--
+
+end)
+makermod.AddCommand('mleadgroupremove', function(ply, args, plyob)
+
+	--
+
+end)
+makermod.AddCommand('mgroupcreate', function(ply, args, plyob)
+
+	--
+
+end)
+makermod.AddCommand('mgroupadd', function(ply, args, plyob)
+
+	--
+
+end)
+makermod.AddCommand('mgroupremove', function(ply, args, plyob)
+
+	--
+
+end)
+makermod.AddCommand('mgselect', function(ply, args, plyob)
+
+	--
+
+end)
+makermod.AddCommand('mgmove', function(ply, args, plyob)
+
+	--
+
+end)
+makermod.AddCommand('mgrotate', function(ply, args, plyob)
+
+	--
+
+end)
+
+-- Groups end --
+----------------
+
 
 makermod.AddCommand('mplace', mPlace) -- toolgun
 makermod.AddCommand('mplacefx', mPlaceFX) -- toolgun 
@@ -1553,7 +1646,7 @@ makermod.AddCommand('mdrop', mDrop) -- toolgun
 makermod.AddCommand('mgrab', mGrab) -- toolgun
 makermod.AddCommand('msetpassword', mSetPassword)
 makermod.AddCommand('mpassword', mPassword)
-makermod.AddCommand('mname', mName)
+makermod.AddCommand('mname', mName, true)
 makermod.AddCommand('mmark', mMark) -- toolgun
 makermod.AddCommand('mmarksave', mMarkSave)
 makermod.AddCommand('mmarkselect', mMarkSelect)
