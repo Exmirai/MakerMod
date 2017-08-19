@@ -1216,7 +1216,7 @@ end
 local function mList(ply, args)
 	local list
 	if #args < 1 then
-		list = GetFileList('models/map_objects/', 'md3')
+		list = GetFileList('models/map_objects/', '/')
 	else
 		list = GetFileList('models/map_objects/' .. args[1], '.md3')
 	end
@@ -1242,7 +1242,7 @@ end
 local function mListFx(ply, args)
 	local list
 	if #args < 1 then
-		list = GetFileList('effects', 'efx')
+		list = GetFileList('effects', '/')
 	else
 		list = GetFileList('effects/' .. args[1], 'efx')
 	end
