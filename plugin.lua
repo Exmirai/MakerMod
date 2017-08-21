@@ -369,7 +369,7 @@ function TraceEntity(ply, dist)
 	pos.z = pos.z + 36.0
 	local angles = JPMath.AngleVectors(ply.angles,true, false, false)
 	local endPos = pos:MA(dist, angles)
-	local mask = Contents.CONTENTS_SOLID | Contents.CONTENTS_SLIME | Contents.CONTENTS_LAVA | Contents.CONTENTS_TERRAIN | Contents.CONTENTS_BODY | Contents.CONTENTS_ITEM | Contents.CONTENTS_CORPSE
+	local mask = Contents.Solid | Contents.Slime | Contents.Lava | Contents.Terrain | Contents.Body | Contents.Item | Contents.Corpse
 	local trace = RayTrace(pos, 0, endPos, ply.id,mask)
 	return trace
 end
@@ -381,7 +381,7 @@ local function CheckEntity(ent, ply)
 			return false
 		else
 			local data = makermod.objects[ent.id]
-			if data['owner'] ~= ply then
+			if data['owner'] ~= plyob then
 				SendReliableCommand(ply.id, string.format('print "You are not owner of this entity!\n"'))
 				return false
 			end
