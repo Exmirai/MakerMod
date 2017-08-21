@@ -576,6 +576,7 @@ function mKill(ply, args, plyob)
 		data.ent = ent
 		data.start = GetRealTime()
 		data.time = tonumber(args[2])
+		if args[2] == nil then data.time = 1 end
 
 		makermod.AddTimer(data)
 
