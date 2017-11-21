@@ -902,14 +902,24 @@ end
 local function mTelesw(ply, args)
 	if not makermod.players[ply.id]['selected'] then return end
 	local data = makermod.objects[makermod.players[ply.id]['selected'].id]
+	local ent = makermod.players[ply.id]['selected']
 	local func = function(a,b,c)
-					if not b then return end
-					if b.player then
-						b.player:Teleport(data['tele_destination'], b.player.angles)
-					else
-						b.position = data['tele_destination'] --TODO: Entity Teleporting?
-					end
-				 end
+		if not b then return end
+		if b.player then
+			if not data['tele_destination'] then
+				data['tele_destination'] = Vector3(tonumber(args[1]), tonumber(args[2]), tonumber(args[3]))
+			end
+			b.player:Teleport(data['tele_destination'], b.player.angles)
+		else
+			b.position = data['tele_destination'] --TODO: Entity Teleporting?
+		end
+	end
+	if ent.touchable then
+		makermod.objects[ent.id]['touchfuncs'][#makermod.objects[ent.id]['touchfuncs'] + 1] = func
+	end
+	if ent.usable then
+		makermod.objects[ent.id]['usefuncs'][#makermod.objects[ent.id]['usefuncs'] + 1] = func
+	end
 end
 
 function mDest(ply, args)
@@ -919,8 +929,11 @@ function mDest(ply, args)
 			local trace = TraceEntity(ply, nil)
 			makermod.objects[makermod.players[ply.id]['selected'].id]['tele_destination'] = Vector3(trace.endpos.x, trace.endpos.y, trace.endpos.z)
 		else
-		 	makermod.objects[makermod.players[ply.id]['selected'].id]['tele_destination'] = ParseVector(ply.position, args, 0)
+		 	--makermod.objects[makermod.players[ply.id]['selected'].id]['tele_destination'] = ParseVector(ply.position, args, 0)
+		 	makermod.objects[makermod.players[ply.id]['selected'].id]['tele_destination'] = Vector3(tonumber(args[1]), tonumber(args[2]), tonumber(args[3]))
 		end
+	else
+		makermod.objects[makermod.players[ply.id]['selected'].id]['tele_destination'] = ParseVector(ply.position, args)
 	end
 end
 
@@ -1666,6 +1679,7 @@ makermod.AddCommand('mtelesp', mTelesp)
 makermod.AddCommand('mlistobs', mListObs)
 makermod.AddCommand('mlight', mLight, true)
 makermod.AddCommand('mlightto', mLightTo, true)
+makermod.AddCommand('mtelesw', mTelesw)
 
 makermod.AddCommand('mellipse', mEllipse)
 makermod.AddCommand('mastroid', mAstroid)
