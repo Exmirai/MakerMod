@@ -369,7 +369,7 @@ function TraceEntity(ply, dist)
 	pos.z = pos.z + 36.0
 	local angles = JPMath.AngleVectors(ply.angles,true, false, false)
 	local endPos = pos:MA(dist, angles)
-	local mask = Contents.CONTENTS_SOLID | Contents.CONTENTS_SLIME | Contents.CONTENTS_LAVA | Contents.CONTENTS_TERRAIN | Contents.CONTENTS_BODY | Contents.CONTENTS_ITEM | Contents.CONTENTS_CORPSE
+	local mask = Contents.Solid | Contents.Slime | Contents.Lava | Contents.Terrain | Contents.Body | Contents.Item | Contents.Corpse
 	local trace = RayTrace(pos, 0, endPos, ply.id,mask)
 	return trace
 end
@@ -381,7 +381,7 @@ local function CheckEntity(ent, ply)
 			return false
 		else
 			local data = makermod.objects[ent.id]
-			if data['owner'] ~= ply then
+			if data['owner'] ~= plyob then
 				SendReliableCommand(ply.id, string.format('print "You are not owner of this entity!\n"'))
 				return false
 			end
@@ -576,6 +576,7 @@ function mKill(ply, args, plyob)
 		data.ent = ent
 		data.start = GetRealTime()
 		data.time = tonumber(args[2])
+		if args[2] == nil then data.time = 1 end
 
 		makermod.AddTimer(data)
 
@@ -901,14 +902,24 @@ end
 local function mTelesw(ply, args)
 	if not makermod.players[ply.id]['selected'] then return end
 	local data = makermod.objects[makermod.players[ply.id]['selected'].id]
+	local ent = makermod.players[ply.id]['selected']
 	local func = function(a,b,c)
-					if not b then return end
-					if b.player then
-						b.player:Teleport(data['tele_destination'], b.player.angles)
-					else
-						b.position = data['tele_destination'] --TODO: Entity Teleporting?
-					end
-				 end
+		if not b then return end
+		if b.player then
+			if not data['tele_destination'] then
+				data['tele_destination'] = Vector3(tonumber(args[1]), tonumber(args[2]), tonumber(args[3]))
+			end
+			b.player:Teleport(data['tele_destination'], b.player.angles)
+		else
+			b.position = data['tele_destination'] --TODO: Entity Teleporting?
+		end
+	end
+	if ent.touchable then
+		makermod.objects[ent.id]['touchfuncs'][#makermod.objects[ent.id]['touchfuncs'] + 1] = func
+	end
+	if ent.usable then
+		makermod.objects[ent.id]['usefuncs'][#makermod.objects[ent.id]['usefuncs'] + 1] = func
+	end
 end
 
 function mDest(ply, args)
@@ -918,8 +929,11 @@ function mDest(ply, args)
 			local trace = TraceEntity(ply, nil)
 			makermod.objects[makermod.players[ply.id]['selected'].id]['tele_destination'] = Vector3(trace.endpos.x, trace.endpos.y, trace.endpos.z)
 		else
-		 	makermod.objects[makermod.players[ply.id]['selected'].id]['tele_destination'] = ParseVector(ply.position, args, 0)
+		 	--makermod.objects[makermod.players[ply.id]['selected'].id]['tele_destination'] = ParseVector(ply.position, args, 0)
+		 	makermod.objects[makermod.players[ply.id]['selected'].id]['tele_destination'] = Vector3(tonumber(args[1]), tonumber(args[2]), tonumber(args[3]))
 		end
+	else
+		makermod.objects[makermod.players[ply.id]['selected'].id]['tele_destination'] = ParseVector(ply.position, args)
 	end
 end
 
@@ -1216,7 +1230,7 @@ end
 local function mList(ply, args)
 	local list
 	if #args < 1 then
-		list = GetFileList('models/map_objects/', 'md3')
+		list = GetFileList('models/map_objects/', '/')
 	else
 		list = GetFileList('models/map_objects/' .. args[1], '.md3')
 	end
@@ -1242,7 +1256,7 @@ end
 local function mListFx(ply, args)
 	local list
 	if #args < 1 then
-		list = GetFileList('effects', 'efx')
+		list = GetFileList('effects', '/')
 	else
 		list = GetFileList('effects/' .. args[1], 'efx')
 	end
@@ -1665,6 +1679,7 @@ makermod.AddCommand('mtelesp', mTelesp)
 makermod.AddCommand('mlistobs', mListObs)
 makermod.AddCommand('mlight', mLight, true)
 makermod.AddCommand('mlightto', mLightTo, true)
+makermod.AddCommand('mtelesw', mTelesw)
 
 makermod.AddCommand('mellipse', mEllipse)
 makermod.AddCommand('mastroid', mAstroid)
